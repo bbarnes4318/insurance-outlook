@@ -114,3 +114,20 @@ describe('Edge cases', () => {
   });
   it('mdLapse = 30% residual', () => near(runModel({ ...DEFAULTS, mdLapse: 0.3 }).years[1].mdResid, 1186412.5));
 });
+
+describe('Chains (agents → net) reconcile with the summary', () => {
+  it('revenue − costs = net for every period and line; All = sum of years', () => {
+    for (const p of out.periods) for (const c of [p.fe, p.md]) near(c.revenue - c.costs, c.net);
+    out.years.forEach((y, i) => {
+      near(out.periods[i].fe.net, y.feNet);
+      near(out.periods[i].md.net, y.mdNet);
+    });
+    near(out.periods[3].fe.net + out.periods[3].md.net, out.cumulative.totalNet);
+    near(out.periods[0].fe.placed, 4067.7);
+    near(out.periods[0].md.placed, 5 * 847.4375);
+  });
+  it('monthly cash in = advances + months 10–12 payments', () => {
+    near(out.fe[35].cashIn, 951841.8 + 166572.31);
+    near(out.fe[35].cashNet, 951841.8 + 166572.31 - 656026.14);
+  });
+});

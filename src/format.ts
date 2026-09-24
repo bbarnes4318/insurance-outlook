@@ -15,6 +15,8 @@ export function compact(v: number) {
   return v < 0 ? `(${s})` : s;
 }
 
+export const count = (v: number) => (Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : Math.abs(v) >= 1e4 ? `${(v / 1e3).toFixed(1)}K` : int(v));
+
 export type Kind = '$' | 'n' | 'n1';
 export const fmt = (k: Kind, v: number) => (k === '$' ? money(v) : k === 'n1' ? num1(v) : int(v));
 
@@ -36,6 +38,8 @@ export const FE_ROWS: [keyof FeMonth, string, Kind][] = [
   ['netPerPlaced', 'Net per placed policy', '$'],
   ['tailEarned', 'Months 10–12 earned', '$'],
   ['tailCash', 'Months 10–12 cash received', '$'],
+  ['cashIn', 'Cash in (advances + months 10–12)', '$'],
+  ['cashNet', 'Net cash flow', '$'],
 ];
 
 export const MD_ROWS: [keyof MdMonth, string, Kind][] = [

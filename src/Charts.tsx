@@ -77,26 +77,59 @@ export function OverviewChart({ out }: { out: Outputs }) {
   );
 }
 
-export function FeMonthlyChart({ out }: { out: Outputs }) {
+// Final Expense cash, month by month: what actually lands (advances + months 10–12 payments) vs what goes out.
+export function CashFlowChart({ out }: { out: Outputs }) {
   const data = out.fe.map((r) => ({ ...r, name: `M${r.month}` }));
   return (
     <Fit>{(w, h) => (
-      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        {[1].map((y) => <ReferenceArea key={y} x1={`M${12 * y + 1}`} x2={`M${12 * y + 12}`} fill="#ffffff" fillOpacity={0.025} />)}
+      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
+        <ReferenceArea x1="M13" x2="M24" fill="#ffffff" fillOpacity={0.025} />
         <CartesianGrid stroke={C.grid} vertical={false} />
         <XAxis dataKey="name" {...axis} ticks={['M1', 'M6', 'M12', 'M13', 'M18', 'M24', 'M25', 'M30', 'M36']}
           tickFormatter={(v: string) => (v === 'M1' ? 'Year 1' : v === 'M13' ? 'Year 2' : v === 'M25' ? 'Year 3' : v.replace('M', 'Mo '))} dy={6} />
         <YAxis tickFormatter={compact} width={60} {...axis} />
-        <Tooltip cursor={{ stroke: C.muted, strokeDasharray: '3 3' }} content={({ active, payload }) => {
+        <Tooltip cursor={{ fill: '#ffffff06' }} content={({ active, payload }) => {
           if (!active || !payload?.length) return null;
           const r = payload[0].payload as (typeof data)[number];
-          return <Tip title={`Month ${r.month} · Year ${Math.ceil(r.month / 12)}`} rows={FE_ROWS.map(([k, l, kind]) => [l, kind, r[k]])} />;
+          return <Tip title={`Month ${r.month} · Year ${Math.ceil(r.month / 12)}`} rows={[
+            ['Advanced commissions', '$', r.advRev, C.fe], ['Months 10–12 payments', '$', r.tailCash, C.feLight],
+            ['Cash in', '$', r.cashIn], ['Agent payouts', '$', r.agentPayout, C.cost], ['Call costs', '$', r.callCost, C.cost],
+            ['Chargebacks', '$', r.lapseCost, C.cost], ['Cash out', '$', r.totalCost], ['Net cash flow', '$', r.cashNet, C.net],
+          ]} />;
         }} />
         <Legend {...legend} />
-        <Area dataKey="advRev" name="Advanced commissions" stackId="in" stroke={C.fe} strokeWidth={2} fill={C.fe} fillOpacity={0.25} isAnimationActive={false} />
-        <Area dataKey="tailCash" name="Months 10–12 payments" stackId="in" stroke={C.feLight} strokeWidth={2} fill={C.feLight} fillOpacity={0.2} isAnimationActive={false} />
-        <Line dataKey="totalCost" name="Costs" stroke="#9a9aa3" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-        <Line dataKey="net" name="Net profit" stroke={C.net} strokeWidth={2.5} dot={false} isAnimationActive={false} />
+        <Bar dataKey="advRev" name="Advanced commissions" stackId="in" fill={C.fe} isAnimationActive={false} />
+        <Bar dataKey="tailCash" name="Months 10–12 payments" stackId="in" fill={C.feLight} isAnimationActive={false} radius={[2, 2, 0, 0]} />
+        <Line dataKey="totalCost" name="Cash out (costs)" stroke="#a1a1aa" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+        <Line dataKey="cashNet" name="Net cash flow" stroke={C.net} strokeWidth={2.5} dot={false} isAnimationActive={false} />
+      </ComposedChart>
+    )}</Fit>
+  );
+}
+
+// Headcount needed: FE agents ramp every quarter; Medicare agents are set per selling season.
+export function TeamChart({ out }: { out: Outputs }) {
+  const data = out.fe.map((r) => ({ name: `M${r.month}`, fe: r, md: out.md[Math.ceil(r.month / 12) - 1] }));
+  return (
+    <Fit>{(w, h) => (
+      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
+        <ReferenceArea x1="M13" x2="M24" fill="#ffffff" fillOpacity={0.025} />
+        <CartesianGrid stroke={C.grid} vertical={false} />
+        <XAxis dataKey="name" {...axis} ticks={['M1', 'M6', 'M12', 'M13', 'M18', 'M24', 'M25', 'M30', 'M36']}
+          tickFormatter={(v: string) => (v === 'M1' ? 'Year 1' : v === 'M13' ? 'Year 2' : v === 'M25' ? 'Year 3' : v.replace('M', 'Mo '))} dy={6} />
+        <YAxis width={60} {...axis} allowDecimals={false} />
+        <Tooltip cursor={{ fill: '#ffffff06' }} content={({ active, payload }) => {
+          if (!active || !payload?.length) return null;
+          const d = payload[0].payload as (typeof data)[number];
+          return <Tip title={`Month ${d.fe.month} · Year ${Math.ceil(d.fe.month / 12)}`} rows={[
+            ['FE agents', 'n', d.fe.agents, C.fe], ['FE calls per day', 'n', d.fe.callsPerDay], ['FE applications', 'n', d.fe.totalApps],
+            ['FE policies placed', 'n', d.fe.totalPlaced], ['Medicare agents (season)', 'n', d.md.agents, C.md],
+            ['Medicare calls per day', 'n', d.md.callsPerDay], ['Medicare policies / selling mo.', 'n', d.md.totalPlaced],
+          ]} />;
+        }} />
+        <Legend {...legend} />
+        <Bar dataKey="fe.agents" name="Final Expense agents" fill={C.fe} isAnimationActive={false} radius={[2, 2, 0, 0]} />
+        <Line dataKey="md.agents" name="Medicare agents (selling season)" type="stepAfter" stroke={C.md} strokeWidth={2.5} dot={false} isAnimationActive={false} />
       </ComposedChart>
     )}</Fit>
   );

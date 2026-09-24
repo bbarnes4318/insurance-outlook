@@ -56,6 +56,8 @@ export interface FeMonth {
   netPerPlaced: number;
   tailEarned: number;
   tailCash: number;
+  cashIn: number; // advRev + tailCash received this month
+  cashNet: number; // cashIn − totalCost
 }
 
 export interface MdMonth {
@@ -97,10 +99,35 @@ export interface YearSummary {
   fePlaced: number;
 }
 
+// One business line's chain for a period: agents → calls → apps → placed → revenue → costs → net.
+export interface Chain {
+  agentsStart: number;
+  agentsEnd: number;
+  callsPerDayStart: number;
+  callsPerDayEnd: number;
+  calls: number;
+  apps: number;
+  placed: number;
+  revenue: number;
+  revParts: [string, number][];
+  payouts: number;
+  callCosts: number;
+  chargebacks: number;
+  retention: number;
+  costs: number; // payouts + callCosts + chargebacks + retention
+  net: number;
+  margin: number;
+}
+export interface Period {
+  fe: Chain;
+  md: Chain;
+}
+
 export interface Outputs {
   fe: FeMonth[]; // 36 months
   md: MdMonth[]; // 3 years, per selling month
   years: YearSummary[]; // 3
+  periods: Period[]; // Year 1, Year 2, Year 3, All 3 years
   cumulative: { totalRev: number; totalNet: number; margin: number };
   partners: { yearly: number[]; total: number }[]; // 4
   splitTotal: number;
@@ -157,12 +184,18 @@ export function runModel(i: Inputs): Outputs {
       netPerPlaced: div(net, totalPlaced),
       tailEarned: i.feComm * (1 - i.feAdvance) * placedPerDay * (1 - i.feLapse) * D,
       tailCash: 0,
+      cashIn: 0,
+      cashNet: 0,
     });
   }
   // Tail paid one third in each of months m+9, m+10, m+11.
   for (const r of fe)
     for (const k of [r.month + 9, r.month + 10, r.month + 11])
       if (k <= 36) fe[k - 1].tailCash += r.tailEarned / 3;
+  for (const r of fe) {
+    r.cashIn = r.advRev + r.tailCash;
+    r.cashNet = r.cashIn - r.totalCost;
+  }
   const receivableAfter36 = sum(fe.map((r) => r.tailEarned)) - sum(fe.map((r) => r.tailCash));
 
   const mdAgents = [i.mdAgentsY1, i.mdAgentsY2, i.mdAgentsY3];
@@ -243,6 +276,83 @@ export function runModel(i: Inputs): Outputs {
     };
   });
 
+  const feChain = (y: number): Chain => {
+    const ms = yr(y);
+    const s = years[y];
+    const payouts = sum(ms.map((r) => r.agentPayout));
+    const callCosts = sum(ms.map((r) => r.callCost));
+    const chargebacks = sum(ms.map((r) => r.lapseCost));
+    return {
+      agentsStart: ms[0].agents,
+      agentsEnd: ms[11].agents,
+      callsPerDayStart: ms[0].callsPerDay,
+      callsPerDayEnd: ms[11].callsPerDay,
+      calls: sum(ms.map((r) => r.totalCalls)),
+      apps: sum(ms.map((r) => r.totalApps)),
+      placed: s.fePlaced,
+      revenue: s.feRev,
+      revParts: [['Advanced commissions', s.feAdv], ['Months 10–12 payments', s.feTail], ['Renewals', s.feRenew]],
+      payouts,
+      callCosts,
+      chargebacks,
+      retention: s.feRetention,
+      costs: payouts + callCosts + chargebacks + s.feRetention,
+      net: s.feNet,
+      margin: div(s.feNet, s.feRev),
+    };
+  };
+  const mdChain = (y: number): Chain => {
+    const r = md[y];
+    const s = years[y];
+    const payouts = MD_SELLING_MONTHS * r.agentPayout;
+    const callCosts = MD_SELLING_MONTHS * r.callCost;
+    const chargebacks = MD_SELLING_MONTHS * r.lapseCost;
+    return {
+      agentsStart: r.agents,
+      agentsEnd: r.agents,
+      callsPerDayStart: r.callsPerDay,
+      callsPerDayEnd: r.callsPerDay,
+      calls: MD_SELLING_MONTHS * r.totalCalls,
+      apps: MD_SELLING_MONTHS * r.totalApps,
+      placed: MD_SELLING_MONTHS * r.totalPlaced,
+      revenue: s.mdRev,
+      revParts: [['New policies', s.mdNew], ['Residuals', s.mdResid]],
+      payouts,
+      callCosts,
+      chargebacks,
+      retention: s.mdRetention,
+      costs: payouts + callCosts + chargebacks + s.mdRetention,
+      net: s.mdNet,
+      margin: div(s.mdNet, s.mdRev),
+    };
+  };
+  // "All 3 years": flows add up; agents and calls/day run from the first year's start to the last year's end.
+  const combine = (cs: Chain[]): Chain => {
+    const add = (k: keyof Chain) => sum(cs.map((c) => c[k] as number));
+    const revenue = add('revenue');
+    const net = add('net');
+    return {
+      agentsStart: cs[0].agentsStart,
+      agentsEnd: cs[2].agentsEnd,
+      callsPerDayStart: cs[0].callsPerDayStart,
+      callsPerDayEnd: cs[2].callsPerDayEnd,
+      calls: add('calls'),
+      apps: add('apps'),
+      placed: add('placed'),
+      revenue,
+      revParts: cs[0].revParts.map(([l], j) => [l, sum(cs.map((c) => c.revParts[j][1]))]),
+      payouts: add('payouts'),
+      callCosts: add('callCosts'),
+      chargebacks: add('chargebacks'),
+      retention: add('retention'),
+      costs: add('costs'),
+      net,
+      margin: div(net, revenue),
+    };
+  };
+  const perYear = [0, 1, 2].map((y) => ({ fe: feChain(y), md: mdChain(y) }));
+  const periods: Period[] = [...perYear, { fe: combine(perYear.map((p) => p.fe)), md: combine(perYear.map((p) => p.md)) }];
+
   const cumRev = sum(years.map((y) => y.totalRev));
   const cumNet = sum(years.map((y) => y.totalNet));
   const splits = [i.split1, i.split2, i.split3, i.split4];
@@ -255,6 +365,7 @@ export function runModel(i: Inputs): Outputs {
     fe,
     md,
     years,
+    periods,
     cumulative: { totalRev: cumRev, totalNet: cumNet, margin: div(cumNet, cumRev) },
     partners,
     splitTotal: sum(splits),
