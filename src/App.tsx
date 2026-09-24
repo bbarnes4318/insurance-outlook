@@ -9,39 +9,52 @@ import { compact, count, FE_ROWS, fmt, int, MD_ROWS, money, num1, pct, SUMMARY_R
 type Unit = '$' | '%' | 'calls' | 'agents' | 'days';
 type Ctl = [InputKey, string, number, number, number, Unit]; // key, label, min, max, step (display units), unit
 
-const FE_BASIC: Ctl[] = [
-  ['feCallsStart', 'Calls per day (start)', 0, 2000, 10, 'calls'],
-  ['feCallCost', 'Cost per call', 0, 50, 0.25, '$'],
-  ['feCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
-];
-const FE_ADV: Ctl[] = [
-  ['feCallsQtrInc', 'Quarterly call growth', 0, 1000, 10, 'calls'],
-  ['feConv', 'Conversion %', 0, 50, 0.5, '%'],
-  ['fePlace', 'Placement %', 0, 100, 1, '%'],
-  ['feLapse', 'Lapse rate', 0, 80, 1, '%'],
-  ['feComm', '1st-year commission', 100, 2000, 10, '$'],
-  ['feAdvance', 'Advanced portion', 0, 100, 1, '%'],
-  ['feRenew', 'Renewal rate', 0, 25, 0.5, '%'],
-  ['fePayout', 'Agent payout / policy', 0, 500, 5, '$'],
-];
-const MD_BASIC: Ctl[] = [
-  ['mdCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
-  ['mdCallCost', 'Cost per call', 0, 50, 0.25, '$'],
-  ['mdAgentsY1', 'Agents – Year 1', 0, 500, 1, 'agents'],
-  ['mdAgentsY2', 'Agents – Year 2', 0, 500, 1, 'agents'],
-  ['mdAgentsY3', 'Agents – Year 3', 0, 500, 1, 'agents'],
-];
-const MD_ADV: Ctl[] = [
-  ['mdConv', 'Conversion %', 0, 50, 0.5, '%'],
-  ['mdPlace', 'Placement %', 0, 100, 1, '%'],
-  ['mdLapse', 'Lapse rate', 0, 80, 1, '%'],
-  ['mdComm', 'Commission / policy', 0, 1500, 10, '$'],
-  ['mdPayout', 'Agent payout / policy', 0, 500, 5, '$'],
-];
-const SHARED_CTLS: Ctl[] = [
-  ['workDays', 'Working days per month', 15, 26, 0.01, 'days'],
-  ['retention', 'Retention cost (% of rev.)', 0, 10, 0.1, '%'],
-  ['holdback', 'Tax / reserve holdback', 0, 60, 1, '%'],
+type Line = 'Final Expense' | 'Medicare' | 'Company';
+const LINES: { name: Line; color: string; groups: [string, Ctl[]][] }[] = [
+  { name: 'Final Expense', color: C.fe, groups: [
+    ['Lead volume', [
+      ['feCallsStart', 'Calls per day (start)', 0, 2000, 10, 'calls'],
+      ['feCallsQtrInc', 'Added each quarter', 0, 1000, 10, 'calls'],
+      ['feCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
+      ['feCallCost', 'Cost per call', 0, 50, 0.25, '$'],
+    ]],
+    ['Conversion', [
+      ['feConv', 'Calls → applications', 0, 50, 0.5, '%'],
+      ['fePlace', 'Applications placed', 0, 100, 1, '%'],
+      ['feLapse', 'Lapse rate', 0, 80, 1, '%'],
+    ]],
+    ['Commission & payout', [
+      ['feComm', '1st-year commission', 100, 2000, 10, '$'],
+      ['feAdvance', 'Paid up front', 0, 100, 1, '%'],
+      ['feRenew', 'Renewal rate', 0, 25, 0.5, '%'],
+      ['fePayout', 'Agent payout / policy', 0, 500, 5, '$'],
+    ]],
+  ] },
+  { name: 'Medicare', color: C.md, groups: [
+    ['Team & leads', [
+      ['mdAgentsY1', 'Agents – Year 1', 0, 500, 1, 'agents'],
+      ['mdAgentsY2', 'Agents – Year 2', 0, 500, 1, 'agents'],
+      ['mdAgentsY3', 'Agents – Year 3', 0, 500, 1, 'agents'],
+      ['mdCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
+      ['mdCallCost', 'Cost per call', 0, 50, 0.25, '$'],
+    ]],
+    ['Conversion', [
+      ['mdConv', 'Calls → applications', 0, 50, 0.5, '%'],
+      ['mdPlace', 'Applications placed', 0, 100, 1, '%'],
+      ['mdLapse', 'Lapse rate', 0, 80, 1, '%'],
+    ]],
+    ['Commission & payout', [
+      ['mdComm', 'Commission / policy', 0, 1500, 10, '$'],
+      ['mdPayout', 'Agent payout / policy', 0, 500, 5, '$'],
+    ]],
+  ] },
+  { name: 'Company', color: C.net, groups: [
+    ['Company', [
+      ['workDays', 'Working days per month', 15, 26, 0.01, 'days'],
+      ['retention', 'Retention cost (% of revenue)', 0, 10, 0.1, '%'],
+      ['holdback', 'Tax / reserve holdback', 0, 60, 1, '%'],
+    ]],
+  ] },
 ];
 const SPLIT_KEYS: InputKey[] = ['split1', 'split2', 'split3', 'split4'];
 const ALL_KEYS = Object.keys(DEFAULTS) as InputKey[];
@@ -125,7 +138,7 @@ function exportCsv(out: Outputs) {
 }
 
 // ---------- small components ----------
-function Control({ ctl, value, onChange, accent, dense }: { ctl: Ctl; value: number; onChange: (v: number) => void; accent: string; dense?: boolean }) {
+function Control({ ctl, value, onChange, accent }: { ctl: Ctl; value: number; onChange: (v: number) => void; accent: string }) {
   const [key, label, min, max, step, unit] = ctl;
   const shown = toDisplay(unit, value);
   const [draft, setDraft] = useState(String(shown));
@@ -134,14 +147,14 @@ function Control({ ctl, value, onChange, accent, dense }: { ctl: Ctl; value: num
   const set = (d: number) => onChange(fromDisplay(unit, clamp(d, min, max)));
   const fill = `${((clamp(shown, min, max) - min) / (max - min)) * 100}%`;
   return (
-    <div className={`flex flex-col justify-center gap-1.5 px-5 ${dense ? 'h-[56px]' : 'h-[66px]'}`}>
+    <div className="flex h-[62px] flex-col justify-center gap-2 px-3.5">
       <div className="flex items-center gap-2">
         <span className="truncate text-[13px] text-sub">{label}</span>
         {changed && (
           <button title="Changed — click to reset" onClick={() => onChange(DEFAULTS[key])}
             className="h-1.5 w-1.5 shrink-0 rounded-full hover:scale-150" style={{ background: accent }} />
         )}
-        <div className="ml-auto flex h-7 w-[100px] shrink-0 items-center rounded-md bg-surface2 px-2 text-[13px] ring-1 ring-line focus-within:ring-muted">
+        <div className="ml-auto flex h-7 w-[96px] shrink-0 items-center rounded-md bg-canvas/70 px-2 text-[13px] ring-1 ring-line focus-within:ring-muted">
           {unit === '$' && <span className="text-muted">$</span>}
           <input type="number" aria-label={`${label} value`} min={min} max={max} step={step} value={draft}
             onChange={(e) => {
@@ -179,12 +192,6 @@ const Btn = ({ onClick, children, primary }: { onClick: () => void; children: Re
     className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors ${primary ? 'bg-ink text-canvas hover:bg-white' : 'text-sub hover:bg-surface2 hover:text-ink'}`}>
     {children}
   </button>
-);
-
-const Section = ({ color, children }: { color: string; children: ReactNode }) => (
-  <div className="flex items-center gap-2 px-5 pb-1 pt-4 text-[12px] font-semibold uppercase tracking-wide text-ink">
-    <span className="h-2 w-2 rounded-full" style={{ background: color }} />{children}
-  </div>
 );
 
 function PeriodCard({ label, net, rev, active, onClick }: { label: string; net: number; rev: number; active: boolean; onClick: () => void }) {
@@ -282,7 +289,6 @@ function Modal({ title, onClose, children, width }: { title: string; onClose: ()
 
 
 // ---------- app ----------
-type Tab = 'Final Expense' | 'Medicare' | 'Other';
 type View = 'Cash flow' | 'Team' | 'Profit by year' | 'Medicare' | 'Table';
 const PERIODS = ['Year 1', 'Year 2', 'Year 3', 'All 3 years'];
 
@@ -290,19 +296,18 @@ export default function App() {
   const [state, setState] = useState<State>(loadState);
   const { inputs, names, goal, page } = state;
   const out = useMemo(() => runModel(inputs), [inputs]);
-  const [tab, setTab] = useState<Tab>('Final Expense');
-  const [advanced, setAdvanced] = useState(false);
+  const [tab, setTab] = useState<Line>('Final Expense');
   const [period, setPeriod] = useState(3);
   const [view, setView] = useState<View>('Cash flow');
   const [modal, setModal] = useState<null | 'notes' | 'month'>(null);
   const [detailYear, setDetailYear] = useState<'Year 1' | 'Year 2' | 'Year 3'>('Year 1');
   const [copied, setCopied] = useState(false);
-  const [box, setBox] = useState({ s: 1, w: 1440, h: 900 });
+  const [box, setBox] = useState({ s: 1, w: 1440, h: 840 });
 
   useEffect(() => {
-    // Design is at least 1440×900; scale to fit, then let the canvas fill the window exactly (no letterboxing).
+    // Design is at least 1440×840; scale to fit, then let the canvas fill the window exactly (no letterboxing).
     const f = () => {
-      const s = Math.min(innerWidth / 1440, innerHeight / 900);
+      const s = Math.min(innerWidth / 1440, innerHeight / 840);
       setBox({ s, w: innerWidth / s, h: innerHeight / s });
     };
     f();
@@ -321,9 +326,7 @@ export default function App() {
   const setPage = (page: Page) => setState((s) => ({ ...s, page }));
   const setName = (i: number, n: string) => setState((s) => ({ ...s, names: s.names.map((x, j) => (j === i ? n : x)) }));
   const splitsOk = Math.abs(out.splitTotal - 1) < 1e-6;
-  const ctl = (c: Ctl, accent: string, dense = false) => (
-    <Control key={c[0]} ctl={c} value={inputs[c[0]]} onChange={(v) => setInput(c[0], v)} accent={accent} dense={dense} />
-  );
+  const line = LINES.find((l) => l.name === tab)!;
   const detailMonths = out.fe.slice((+detailYear.slice(-1) - 1) * 12, +detailYear.slice(-1) * 12);
   const p = out.periods[period];
   const periodNet = period < 3 ? out.years[period].totalNet : out.cumulative.totalNet;
@@ -356,33 +359,28 @@ export default function App() {
         {page === 'Income goal' ? <Goal inputs={inputs} names={names} goal={goal} setGoal={setGoal} /> : (
         <div className="flex min-h-0 flex-1 gap-4 p-4">
           {/* assumptions */}
-          <Card className="flex w-[310px] shrink-0 flex-col overflow-hidden">
-            <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line/70 px-5">
-              <h2 className="text-[14px] font-semibold">Assumptions</h2>
-              <button role="switch" aria-checked={advanced} onClick={() => setAdvanced(!advanced)} className="flex items-center gap-2 text-[13px] text-sub">
-                Advanced
-                <span className={`relative h-5 w-9 rounded-full transition-colors ${advanced ? 'bg-fe' : 'bg-line'}`}>
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${advanced ? 'left-[18px]' : 'left-0.5'}`} />
-                </span>
-              </button>
-            </div>
-            {!advanced ? (
-              <div>
-                <Section color={C.fe}>Final Expense</Section>
-                {FE_BASIC.map((c) => ctl(c, C.fe))}
-                <Section color={C.md}>Medicare</Section>
-                {MD_BASIC.map((c) => ctl(c, C.md))}
+          <Card className="flex w-[320px] shrink-0 flex-col overflow-hidden">
+            <div className="shrink-0 border-b border-line/70 px-3 pb-3 pt-3.5">
+              <h2 className="mb-2.5 px-1 text-[14px] font-semibold">Assumptions</h2>
+              <div role="tablist" className="grid grid-cols-3 gap-1 rounded-lg bg-canvas/70 p-1 ring-1 ring-line/70">
+                {LINES.map((l) => (
+                  <button key={l.name} role="tab" aria-selected={tab === l.name} onClick={() => setTab(l.name)}
+                    className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md py-1.5 text-[12.5px] font-medium transition-colors ${tab === l.name ? 'bg-surface2 text-ink ring-1 ring-line' : 'text-muted hover:text-ink'}`}>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: l.color }} />{l.name}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <>
-                <div className="flex shrink-0 gap-1 px-4 pt-3">
-                  <Tabs value={tab} options={['Final Expense', 'Medicare', 'Other']} onChange={setTab} />
-                </div>
-                {tab === 'Final Expense' && <div>{FE_BASIC.map((c) => ctl(c, C.fe, true))}<Section color={C.fe}>Advanced</Section>{FE_ADV.map((c) => ctl(c, C.fe, true))}</div>}
-                {tab === 'Medicare' && <div>{MD_BASIC.map((c) => ctl(c, C.md, true))}<Section color={C.md}>Advanced</Section>{MD_ADV.map((c) => ctl(c, C.md, true))}</div>}
-                {tab === 'Other' && <div className="pt-2">{SHARED_CTLS.map((c) => ctl(c, C.net))}</div>}
-              </>
-            )}
+            </div>
+            <div className="scroll-y min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3.5">
+              {line.groups.map(([title, ctls]) => (
+                <section key={title}>
+                  <h3 className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{title}</h3>
+                  <div className="divide-y divide-line/60 rounded-lg bg-surface2/40 ring-1 ring-line/60">
+                    {ctls.map((c) => <Control key={c[0]} ctl={c} value={inputs[c[0]]} onChange={(v) => setInput(c[0], v)} accent={line.color} />)}
+                  </div>
+                </section>
+              ))}
+            </div>
           </Card>
 
           {/* main */}
@@ -495,7 +493,7 @@ export default function App() {
 
             <Card className="grid shrink-0 grid-cols-3 divide-x divide-line/70 py-3">
               {([['FE net / policy', money(out.unit.feNetPerPlaced), ''], ['Medicare net / policy', money(out.unit.mdNetPerPlaced), ''],
-                ['FE owed after mo 36', compact(out.unit.receivableAfter36), money(out.unit.receivableAfter36)]] as const).map(([l, v, t]) => (
+                ['FE still owed', compact(out.unit.receivableAfter36), `${money(out.unit.receivableAfter36)} of months 10–12 payments not yet received`]] as const).map(([l, v, t]) => (
                 <div key={l} className="px-4" title={t || undefined}>
                   <div className="whitespace-nowrap text-[11px] text-muted">{l}</div>
                   <div className="tnum text-[17px] font-semibold">{v}</div>

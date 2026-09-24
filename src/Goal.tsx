@@ -39,11 +39,11 @@ function Funnel({ l, color, conv, place }: { l: LineRecipe; color: string; conv:
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1">
       {stages.map(([label, v, rate, w], k) => (
-        <div key={label} className="relative flex max-h-[84px] min-h-[52px] flex-1 items-center justify-center"
+        <div key={label} className="relative flex max-h-[72px] min-h-[36px] flex-1 items-center justify-center"
           style={{ width: `${w}%`, clipPath: 'polygon(0 0, 100% 0, 94% 100%, 6% 100%)', background: `linear-gradient(180deg, ${color}${['55', '3d', '28'][k]}, ${color}${['3a', '28', '18'][k]})` }}>
           <div className="text-center leading-tight">
-            <Num v={v} f={k === 0 ? int : num1} className="text-[20px] font-semibold" />
-            <div className="text-[11px] text-sub">{label}{rate && <span className="text-muted"> · {rate}</span>}</div>
+            <Num v={v} f={k === 0 ? int : num1} className="text-[17px] font-semibold leading-5" />
+            <div className="text-[10.5px] leading-[13px] text-sub">{label}{rate && <span className="text-muted"> · {rate}</span>}</div>
           </div>
         </div>
       ))}
@@ -51,15 +51,18 @@ function Funnel({ l, color, conv, place }: { l: LineRecipe; color: string; conv:
   );
 }
 
-// One dot per agent on the phones.
+// Headcount as dots, capped at two rows; past that each dot stands for several agents.
 function Team({ n, color }: { n: number; color: string }) {
-  const MAX = 120;
+  const unit = [1, 2, 5, 10, 25, 50, 100].find((u) => n / u <= 56) ?? Math.ceil(n / 56);
+  const dots = Math.ceil(n / unit);
   return (
-    <div className="flex min-h-[34px] flex-wrap content-start gap-[5px]">
-      {Array.from({ length: Math.min(n, MAX) }, (_, k) => (
-        <span key={k} className="goal-dot h-[10px] w-[10px] rounded-full" style={{ background: color, animationDelay: `${Math.min(k, 60) * 12}ms`, boxShadow: `0 0 8px ${color}88` }} />
-      ))}
-      {n > MAX && <span className="text-[12px] leading-[10px] text-muted">+{int(n - MAX)}</span>}
+    <div className="flex items-start gap-3">
+      <div className="flex min-h-[25px] flex-1 flex-wrap content-start gap-[5px]">
+        {Array.from({ length: dots }, (_, k) => (
+          <span key={`${unit}-${k}`} className="goal-dot h-[10px] w-[10px] rounded-full" style={{ background: color, animationDelay: `${k * 10}ms`, boxShadow: `0 0 8px ${color}88` }} />
+        ))}
+      </div>
+      {unit > 1 && <span className="shrink-0 text-[11px] leading-[10px] text-muted">● = {unit} agents</span>}
     </div>
   );
 }
@@ -92,7 +95,7 @@ function LineCard({ name, when, color, l, conv, place, perAgent, off }: {
   name: string; when: string; color: string; l: LineRecipe; conv: number; place: number; perAgent: number; off: boolean;
 }) {
   return (
-    <Card className={`relative flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-4 transition-opacity ${off ? 'opacity-35' : ''}`}>
+    <Card className={`relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-hidden p-4 transition-opacity ${off ? 'opacity-35' : ''}`}>
       <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ background: `${color}22` }} />
       <div className="flex items-baseline gap-2">
         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
@@ -224,19 +227,6 @@ export function Goal({ inputs, names, goal, setGoal }: { inputs: Inputs; names: 
               <li>The agency keeps <B>{money(r.companyNet)}</B> a month. {you}'s {pct(share)} is <span className="font-bold text-net">{money(goal.amount)}</span>.</li>
             </ol>
           )}
-          {r.feasible && (
-            <div className="mt-auto flex flex-col gap-2 pt-3 text-[12px] leading-[17px]">
-              {hasFe && (
-                <div className="rounded-lg bg-surface2/60 px-3 py-2 text-muted">
-                  <span className="text-ink">When: </span>
-                  {r.feMonthReached ? <>the current plan hits {int(fe.callsDay)} FE calls/day in <B>month {r.feMonthReached}</B> (year {Math.ceil(r.feMonthReached / 12)}).</>
-                    : <>beyond the 3-year plan, which tops out at {int(planCallsAt36)} FE calls/day.</>}
-                </div>
-              )}
-              {hasFe && <div className="rounded-lg bg-surface2/60 px-3 py-2 text-muted"><span className="text-ink">Ramp: </span>months 1–9 pay about <span className="text-sub">{money(r.youEarly)}</span>/mo until the held-back 25% starts landing.</div>}
-              <div className="rounded-lg bg-net/10 px-3 py-2 text-muted"><span className="text-net">Upside: </span>from year 2, renewals{hasMd ? ' and Medicare residuals' : ''} add about <span className="text-ink">{money(r.upside)}</span>/mo on top.</div>
-            </div>
-          )}
         </Card>
       </div>
 
@@ -254,6 +244,25 @@ export function Goal({ inputs, names, goal, setGoal }: { inputs: Inputs; names: 
           <LineCard name="Medicare" when={`${MD_MONTHS.length} selling months`} color={C.md} l={md} conv={inputs.mdConv} place={inputs.mdPlace} perAgent={inputs.mdCallsPerAgent} off={!hasMd || !r.feasible} />
         </div>
 
+        {r.feasible && (
+          <div className="grid shrink-0 grid-cols-3 gap-3 text-[12px] leading-[17px]">
+            <div className="rounded-xl bg-surface px-4 py-2.5 text-muted ring-1 ring-line/70">
+              <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-sub">When</div>
+              {!hasFe ? <>Medicare runs on its own season, set by the agents you staff each year.</>
+                : r.feMonthReached ? <>The current plan hits {int(fe.callsDay)} FE calls a day in <B>month {r.feMonthReached}</B> (year {Math.ceil(r.feMonthReached / 12)}).</>
+                : <>Beyond the 3-year plan, which tops out at {int(planCallsAt36)} FE calls a day.</>}
+            </div>
+            <div className="rounded-xl bg-surface px-4 py-2.5 text-muted ring-1 ring-line/70">
+              <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-sub">Ramp</div>
+              {hasFe ? <>Months 1–9 pay about <B>{money(r.youEarly)}</B> a month until the held-back 25% starts landing.</> : <>No ramp: Medicare commissions are paid as policies place.</>}
+            </div>
+            <div className="rounded-xl bg-net/10 px-4 py-2.5 text-muted ring-1 ring-net/25">
+              <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-net">Upside</div>
+              From year 2, renewals{hasMd ? ' and Medicare residuals' : ''} add about <B>{money(r.upside)}</B> a month on top.
+            </div>
+          </div>
+        )}
+
         <Card className="shrink-0 px-5 py-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-[14px] font-semibold">Where every dollar goes</h2>
@@ -264,7 +273,7 @@ export function Goal({ inputs, names, goal, setGoal }: { inputs: Inputs; names: 
               <div key={k} title={`${k}: ${money(v)}`}
                 className={`flex h-full min-w-0 items-center justify-center overflow-hidden text-[11px] font-semibold transition-all duration-500 ${me ? 'goal-me text-white' : 'text-white/70'}`}
                 style={{ width: `${(v / flowTotal) * 100}%`, background: c }}>
-                <span className="truncate px-1">{(v / flowTotal) > 0.06 ? k : ''}</span>
+                <span className="truncate px-1">{v / flowTotal > 0.1 ? k : ''}</span>
               </div>
             ))}
           </div>

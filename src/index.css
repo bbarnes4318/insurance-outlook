@@ -43,3 +43,6 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 .goal-steps { counter-reset: s; }
 .goal-steps li { counter-increment: s; position: relative; padding-left: 34px; }
 .goal-steps li::before { content: counter(s); position: absolute; left: 0; top: -1px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #199e70, #3987e5); }
+.scroll-y { scrollbar-width: thin; scrollbar-color: #34343a transparent; }
+.scroll-y::-webkit-scrollbar { display: block; width: 6px; }
+.scroll-y::-webkit-scrollbar-thumb { background: #34343a; border-radius: 3px; }
