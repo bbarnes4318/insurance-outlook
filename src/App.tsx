@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { DEFAULTS, MD_MONTHS, runModel, type InputKey, type Inputs, type Outputs } from './engine/model';
-import { FeMonthlyChart, MedicareChart, OverviewChart, Sparkline, C } from './Charts';
+import { FeMonthlyChart, MedicareChart, OverviewChart, C } from './Charts';
 import { compact, FE_ROWS, fmt, int, MD_ROWS, money, num1, pct, SUMMARY_ROWS } from './format';
 
 // ---------- controls ----------
@@ -13,14 +13,14 @@ const FE_BASIC: Ctl[] = [
   ['feCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
 ];
 const FE_ADV: Ctl[] = [
-  ['feCallsQtrInc', 'Calls per day quarterly increase', 0, 1000, 10, 'calls'],
-  ['feConv', 'Conversion % (apps / calls)', 0, 50, 0.5, '%'],
-  ['fePlace', 'Placement % (placed / apps)', 0, 100, 1, '%'],
+  ['feCallsQtrInc', 'Quarterly call growth', 0, 1000, 10, 'calls'],
+  ['feConv', 'Conversion %', 0, 50, 0.5, '%'],
+  ['fePlace', 'Placement %', 0, 100, 1, '%'],
   ['feLapse', 'Lapse rate', 0, 80, 1, '%'],
-  ['feComm', 'Avg first-year commission per policy', 100, 2000, 10, '$'],
+  ['feComm', '1st-year commission', 100, 2000, 10, '$'],
   ['feAdvance', 'Advanced portion', 0, 100, 1, '%'],
   ['feRenew', 'Renewal rate', 0, 25, 0.5, '%'],
-  ['fePayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
+  ['fePayout', 'Agent payout / policy', 0, 500, 5, '$'],
 ];
 const MD_BASIC: Ctl[] = [
   ['mdCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
@@ -33,18 +33,17 @@ const MD_ADV: Ctl[] = [
   ['mdConv', 'Conversion %', 0, 50, 0.5, '%'],
   ['mdPlace', 'Placement %', 0, 100, 1, '%'],
   ['mdLapse', 'Lapse rate', 0, 80, 1, '%'],
-  ['mdComm', 'Avg commission per policy', 0, 1500, 10, '$'],
-  ['mdPayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
+  ['mdComm', 'Commission / policy', 0, 1500, 10, '$'],
+  ['mdPayout', 'Agent payout / policy', 0, 500, 5, '$'],
 ];
 const SHARED_CTLS: Ctl[] = [
   ['workDays', 'Working days per month', 15, 26, 0.01, 'days'],
-  ['retention', 'Retention cost (% of revenue)', 0, 10, 0.1, '%'],
-  ['holdback', 'Tax / reserve holdback before partner payout', 0, 60, 1, '%'],
+  ['retention', 'Retention cost (% of rev.)', 0, 10, 0.1, '%'],
+  ['holdback', 'Tax / reserve holdback', 0, 60, 1, '%'],
 ];
 const SPLIT_KEYS: InputKey[] = ['split1', 'split2', 'split3', 'split4'];
 const ALL_KEYS = Object.keys(DEFAULTS) as InputKey[];
 const DEFAULT_NAMES = ['Partner 1', 'Partner 2', 'Partner 3', 'Partner 4'];
-const PARTNER_COLORS = [C.fe, C.md, C.net, C.gold];
 
 const toDisplay = (unit: Unit, v: number) => (unit === '%' ? +(v * 100).toFixed(4) : v);
 const fromDisplay = (unit: Unit, v: number) => (unit === '%' ? v / 100 : v);
@@ -122,7 +121,7 @@ function useCountUp(target: number, ms = 250) {
   return v;
 }
 
-function Control({ ctl, value, onChange, accent }: { ctl: Ctl; value: number; onChange: (v: number) => void; accent: string }) {
+function Control({ ctl, value, onChange, accent, dense }: { ctl: Ctl; value: number; onChange: (v: number) => void; accent: string; dense?: boolean }) {
   const [key, label, min, max, step, unit] = ctl;
   const shown = toDisplay(unit, value);
   const [draft, setDraft] = useState(String(shown));
@@ -131,18 +130,14 @@ function Control({ ctl, value, onChange, accent }: { ctl: Ctl; value: number; on
   const set = (d: number) => onChange(fromDisplay(unit, clamp(d, min, max)));
   const fill = `${((clamp(shown, min, max) - min) / (max - min)) * 100}%`;
   return (
-    <div className="flex h-[56px] flex-col justify-center gap-1 border-b border-line/50 px-4">
-      <div className="flex items-center gap-2 text-[12px]">
-        <span className="truncate text-ink/90">{label}</span>
+    <div className={`flex flex-col justify-center gap-1.5 px-5 ${dense ? 'h-[56px]' : 'h-[66px]'}`}>
+      <div className="flex items-center gap-2">
+        <span className="truncate text-[13px] text-sub">{label}</span>
         {changed && (
-          <button title="Reset to default" onClick={() => onChange(DEFAULTS[key])}
-            className="h-2 w-2 shrink-0 rounded-full hover:scale-150" style={{ background: accent }} />
+          <button title="Changed — click to reset" onClick={() => onChange(DEFAULTS[key])}
+            className="h-1.5 w-1.5 shrink-0 rounded-full hover:scale-150" style={{ background: accent }} />
         )}
-      </div>
-      <div className="flex items-center gap-3">
-        <input type="range" aria-label={label} min={min} max={max} step={step} value={shown} onChange={(e) => set(+e.target.value)}
-          className="min-w-0 flex-1 cursor-pointer" style={{ ['--accent' as string]: accent, ['--fill' as string]: fill }} />
-        <div className="flex h-7 w-[112px] shrink-0 items-center rounded-md border border-line bg-canvas px-2 text-[12px] focus-within:border-muted">
+        <div className="ml-auto flex h-7 w-[100px] shrink-0 items-center rounded-md bg-surface2 px-2 text-[13px] ring-1 ring-line focus-within:ring-muted">
           {unit === '$' && <span className="text-muted">$</span>}
           <input type="number" aria-label={`${label} value`} min={min} max={max} step={step} value={draft}
             onChange={(e) => {
@@ -152,21 +147,22 @@ function Control({ ctl, value, onChange, accent }: { ctl: Ctl; value: number; on
             }}
             onBlur={() => (Number.isFinite(+draft) && draft !== '' ? set(+draft) : setDraft(String(shown)))}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            className="w-full min-w-0 bg-transparent text-right outline-none" />
-          <span className="ml-1 text-muted">{unit === '$' ? '' : unit === '%' ? '%' : unit}</span>
+            className="w-full min-w-0 bg-transparent text-right font-medium text-ink outline-none" />
+          {unit !== '$' && <span className="ml-1 text-[12px] text-muted">{unit === '%' ? '%' : unit}</span>}
         </div>
       </div>
+      <input type="range" aria-label={label} min={min} max={max} step={step} value={shown} onChange={(e) => set(+e.target.value)}
+        className="w-full cursor-pointer" style={{ ['--accent' as string]: accent, ['--fill' as string]: fill }} />
     </div>
   );
 }
 
-function Segmented<T extends string>({ value, options, onChange, accent = C.fe }: { value: T; options: T[]; onChange: (v: T) => void; accent?: string }) {
+function Tabs<T extends string>({ value, options, onChange }: { value: T; options: T[]; onChange: (v: T) => void }) {
   return (
-    <div className="flex rounded-lg border border-line bg-canvas p-0.5 text-[12px]">
+    <div className="flex gap-1">
       {options.map((o) => (
         <button key={o} onClick={() => onChange(o)}
-          className={`rounded-md px-3 py-1 transition-colors ${o === value ? 'bg-surface2 font-medium text-ink' : 'text-muted hover:text-ink'}`}
-          style={o === value ? { boxShadow: `inset 0 -2px 0 ${accent}` } : undefined}>
+          className={`whitespace-nowrap rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${o === value ? 'bg-surface2 text-ink ring-1 ring-line' : 'text-muted hover:text-ink'}`}>
           {o}
         </button>
       ))}
@@ -175,29 +171,43 @@ function Segmented<T extends string>({ value, options, onChange, accent = C.fe }
 }
 
 const Card = ({ className = '', children }: { className?: string; children: ReactNode }) => (
-  <div className={`rounded-xl border border-line bg-surface ${className}`}>{children}</div>
+  <div className={`rounded-xl bg-surface ring-1 ring-line/70 ${className}`}>{children}</div>
 );
 
 const Btn = ({ onClick, children, primary }: { onClick: () => void; children: ReactNode; primary?: boolean }) => (
   <button onClick={onClick}
-    className={`h-8 rounded-lg border px-3 text-[12px] font-medium transition-colors ${primary ? 'border-fe/40 bg-fe/10 text-fe hover:bg-fe/20' : 'border-line bg-surface text-ink/90 hover:border-muted'}`}>
+    className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors ${primary ? 'bg-ink text-canvas hover:bg-white' : 'text-sub hover:bg-surface2 hover:text-ink'}`}>
     {children}
   </button>
 );
 
-function Kpi({ title, net, rev, margin, accent }: { title: string; net: number; rev: number; margin: number; accent: string }) {
-  const n = useCountUp(net);
-  const r = useCountUp(rev);
+const Section = ({ color, children }: { color: string; children: ReactNode }) => (
+  <div className="flex items-center gap-2 px-5 pb-1 pt-4 text-[12px] font-semibold uppercase tracking-wide text-ink">
+    <span className="h-2 w-2 rounded-full" style={{ background: color }} />{children}
+  </div>
+);
+
+function Hero({ out }: { out: Outputs }) {
+  const n = useCountUp(out.cumulative.totalNet);
   return (
-    <Card className="relative flex-1 overflow-hidden px-4 py-3">
-      <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: accent }} />
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{title}</div>
-      <div title={money(net)} className={`mt-0.5 text-[26px] font-semibold leading-tight ${net < 0 ? 'text-cost' : 'text-ink'}`}>{compact(n)}</div>
-      <div className="mt-0.5 flex items-center justify-between whitespace-nowrap text-[11px]">
-        <span className="text-muted" title={money(rev)}>Revenue <span className="text-ink/80">{compact(r)}</span></span>
-        <span className={`rounded-md px-1.5 py-px font-medium ${margin < 0 ? 'bg-cost/15 text-cost' : 'bg-net/15 text-net'}`}>{pct(margin)} margin</span>
-      </div>
-    </Card>
+    <div className="flex h-full flex-col justify-center px-6">
+      <div className="text-[13px] text-muted">3-year net profit</div>
+      <div title={money(out.cumulative.totalNet)} className={`tnum text-[40px] font-semibold leading-[48px] tracking-tight ${n < 0 ? 'text-cost' : 'text-ink'}`}>{compact(n)}</div>
+      <div className="text-[12px] leading-4 text-muted">Revenue <span className="text-sub" title={money(out.cumulative.totalRev)}>{compact(out.cumulative.totalRev)}</span></div>
+      <div className="text-[12px] leading-4 text-muted">Margin <span className="text-sub">{pct(out.cumulative.margin)}</span></div>
+    </div>
+  );
+}
+
+function YearTile({ i, y }: { i: number; y: Outputs['years'][number] }) {
+  const n = useCountUp(y.totalNet);
+  return (
+    <div className="flex min-w-0 flex-1 flex-col justify-center border-l border-line/70 px-5">
+      <div className="text-[13px] text-muted">Year {i + 1} net</div>
+      <div title={money(y.totalNet)} className={`tnum text-[26px] font-semibold leading-9 ${n < 0 ? 'text-cost' : 'text-ink'}`}>{compact(n)}</div>
+      <div className="text-[12px] leading-4 text-muted">Revenue <span className="text-sub" title={money(y.totalRev)}>{compact(y.totalRev)}</span></div>
+      <div className="text-[12px] leading-4 text-muted">Margin <span className="text-sub">{pct(y.margin)}</span></div>
+    </div>
   );
 }
 
@@ -208,11 +218,11 @@ function Modal({ title, onClose, children, width }: { title: string; onClose: ()
     return () => removeEventListener('keydown', k);
   }, [onClose]);
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="rounded-2xl border border-line bg-surface p-5 shadow-2xl" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
-          <button onClick={onClose} className="h-7 w-7 rounded-md text-muted hover:bg-surface2 hover:text-ink">✕</button>
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70" onMouseDown={onClose}>
+      <div className="rounded-2xl bg-surface p-6 shadow-2xl ring-1 ring-line" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-[16px] font-semibold">{title}</h2>
+          <button onClick={onClose} className="h-8 w-8 rounded-md text-muted hover:bg-surface2 hover:text-ink">✕</button>
         </div>
         {children}
       </div>
@@ -220,20 +230,19 @@ function Modal({ title, onClose, children, width }: { title: string; onClose: ()
   );
 }
 
+function Stat({ label, value, sub, className = '' }: { label: string; value: string; sub?: string; className?: string }) {
+  return (
+    <div className={`rounded-lg bg-surface2/60 px-4 py-3 ${className}`}>
+      <div className="text-[12px] text-muted">{label}</div>
+      <div className="tnum mt-0.5 text-[18px] font-semibold text-ink">{value}</div>
+      {sub && <div className="text-[11px] text-muted">{sub}</div>}
+    </div>
+  );
+}
+
 // ---------- app ----------
 type Tab = 'Final Expense' | 'Medicare' | 'Other';
-type ChartMode = 'Big picture' | 'Final Expense by month' | 'Medicare by year';
-const CHART_CAPTION: Record<ChartMode, string> = {
-  'Big picture': 'Revenue, costs and net profit each year',
-  'Final Expense by month': 'Cash coming in vs costs, month by month',
-  'Medicare by year': 'Hover a year for the per-month breakdown',
-};
-
-const Section = ({ color, children }: { color: string; children: ReactNode }) => (
-  <div className="flex items-center gap-2 bg-surface2/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
-    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />{children}
-  </div>
-);
+type View = 'By year' | 'FE by month' | 'Medicare' | 'Table';
 
 export default function App() {
   const [state, setState] = useState<State>(loadState);
@@ -241,17 +250,17 @@ export default function App() {
   const out = useMemo(() => runModel(inputs), [inputs]);
   const [tab, setTab] = useState<Tab>('Final Expense');
   const [advanced, setAdvanced] = useState(false);
-  const [chart, setChart] = useState<ChartMode>('Big picture');
+  const [view, setView] = useState<View>('By year');
   const [modal, setModal] = useState<null | 'notes' | 'month'>(null);
   const [detailYear, setDetailYear] = useState<'Year 1' | 'Year 2' | 'Year 3'>('Year 1');
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState({ s: 1, w: 1600, h: 900 });
+  const [box, setBox] = useState({ s: 1, w: 1440, h: 900 });
 
   useEffect(() => {
-    // Scale so the design is at least 1440×900, then let the canvas fill the window exactly (no letterboxing).
+    // Design is at least 1440×900; scale to fit, then let the canvas fill the window exactly (no letterboxing).
     const f = () => {
       const s = Math.min(innerWidth / 1440, innerHeight / 900);
-      setView({ s, w: innerWidth / s, h: innerHeight / s });
+      setBox({ s, w: innerWidth / s, h: innerHeight / s });
     };
     f();
     addEventListener('resize', f);
@@ -267,259 +276,211 @@ export default function App() {
   const setInput = (k: InputKey, v: number) => setState((s) => ({ ...s, inputs: { ...s.inputs, [k]: v } }));
   const setName = (i: number, n: string) => setState((s) => ({ ...s, names: s.names.map((x, j) => (j === i ? n : x)) }));
   const splitsOk = Math.abs(out.splitTotal - 1) < 1e-6;
-  const taxLabel = inputs.holdback === 0 ? 'pre-tax' : `after ${pct(inputs.holdback)} holdback`;
-
-  const ctl = (c: Ctl, accent: string) => <Control key={c[0]} ctl={c} value={inputs[c[0]]} onChange={(v) => setInput(c[0], v)} accent={accent} />;
-
-  const splitInput = (i: number, cls = '') => (
-    <div className={`flex h-7 items-center rounded-md border px-2 text-[12px] ${splitsOk ? 'border-line' : 'border-cost/60'} bg-canvas ${cls}`}>
-      <input type="number" aria-label={`${names[i]} split`} min={0} max={100} step={0.5} value={+(inputs[SPLIT_KEYS[i]] * 100).toFixed(4)}
-        onChange={(e) => Number.isFinite(e.target.valueAsNumber) && setInput(SPLIT_KEYS[i], clamp(e.target.valueAsNumber, 0, 100) / 100)}
-        className="w-full min-w-0 bg-transparent text-right outline-none" />
-      <span className="ml-1 text-muted">%</span>
-    </div>
+  const ctl = (c: Ctl, accent: string, dense = false) => (
+    <Control key={c[0]} ctl={c} value={inputs[c[0]]} onChange={(v) => setInput(c[0], v)} accent={accent} dense={dense} />
   );
-  const nameInput = (i: number, cls = '') => (
-    <input aria-label={`Partner ${i + 1} name`} value={names[i]} onChange={(e) => setName(i, e.target.value)} maxLength={24}
-      className={`min-w-0 rounded-md border border-transparent bg-transparent px-1 outline-none hover:border-line focus:border-muted ${cls}`} />
-  );
+  const detailMonths = out.fe.slice((+detailYear.slice(-1) - 1) * 12, +detailYear.slice(-1) * 12);
 
   return (
     <div className="h-full w-full bg-canvas">
-      <div>
-        <div className="relative flex flex-col overflow-hidden bg-canvas text-ink" style={{ width: view.w, height: view.h, transform: `scale(${view.s})`, transformOrigin: 'top left' }}>
-          {/* top bar */}
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-5">
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-fe to-md text-[13px] font-bold text-canvas">IO</div>
-              <h1 className="text-[16px] font-semibold tracking-tight">Insurance Outlook</h1>
-              <span className="text-[12px] text-muted">Final Expense + Medicare · 3-year plan</span>
-            </div>
-            <div className="ml-auto flex gap-2">
-              <Btn onClick={() => setModal('notes')}>Model notes</Btn>
-              <Btn onClick={() => setState({ inputs: { ...DEFAULTS }, names: [...DEFAULT_NAMES] })}>Reset to defaults</Btn>
-              <Btn onClick={() => {
-                navigator.clipboard.writeText(location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
-              }}>{copied ? 'Link copied ✓' : 'Copy share link'}</Btn>
-              <Btn primary onClick={() => exportCsv(out)}>Export CSV</Btn>
-            </div>
-          </header>
+      <div className="relative flex flex-col overflow-hidden bg-canvas text-ink" style={{ width: box.w, height: box.h, transform: `scale(${box.s})`, transformOrigin: 'top left' }}>
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line/70 px-6">
+          <h1 className="text-[16px] font-semibold tracking-tight">Insurance Outlook</h1>
+          <span className="text-[13px] text-muted">Final Expense + Medicare · 3-year plan</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Btn onClick={() => setModal('notes')}>Model notes</Btn>
+            <Btn onClick={() => setState({ inputs: { ...DEFAULTS }, names: [...DEFAULT_NAMES] })}>Reset</Btn>
+            <Btn onClick={() => navigator.clipboard.writeText(location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
+              {copied ? 'Link copied ✓' : 'Copy share link'}
+            </Btn>
+            <Btn primary onClick={() => exportCsv(out)}>Export CSV</Btn>
+          </div>
+        </header>
 
-          <div className="flex min-h-0 flex-1 gap-3 p-3">
-            {/* left rail */}
-            <Card className="flex w-[340px] shrink-0 flex-col overflow-hidden">
-              <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-4">
-                <h3 className="text-[14px] font-semibold">Assumptions</h3>
-                <label className="flex cursor-pointer items-center gap-2 text-[12px] text-muted">
-                  Advanced mode
-                  <button role="switch" aria-checked={advanced} onClick={() => setAdvanced(!advanced)}
-                    className={`relative h-5 w-9 rounded-full transition-colors ${advanced ? 'bg-fe' : 'bg-line'}`}>
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${advanced ? 'left-[18px]' : 'left-0.5'}`} />
-                  </button>
-                </label>
+        <div className="flex min-h-0 flex-1 gap-4 p-4">
+          {/* assumptions */}
+          <Card className="flex w-[320px] shrink-0 flex-col overflow-hidden">
+            <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line/70 px-5">
+              <h2 className="text-[14px] font-semibold">Assumptions</h2>
+              <button role="switch" aria-checked={advanced} onClick={() => setAdvanced(!advanced)} className="flex items-center gap-2 text-[13px] text-sub">
+                Advanced
+                <span className={`relative h-5 w-9 rounded-full transition-colors ${advanced ? 'bg-fe' : 'bg-line'}`}>
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${advanced ? 'left-[18px]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            </div>
+            {!advanced ? (
+              <div>
+                <Section color={C.fe}>Final Expense</Section>
+                {FE_BASIC.map((c) => ctl(c, C.fe))}
+                <Section color={C.md}>Medicare</Section>
+                {MD_BASIC.map((c) => ctl(c, C.md))}
               </div>
-              {!advanced ? (
-                <div>
-                  <Section color={C.fe}>Final Expense</Section>
-                  {FE_BASIC.map((c) => ctl(c, C.fe))}
-                  <Section color={C.md}>Medicare</Section>
-                  {MD_BASIC.map((c) => ctl(c, C.md))}
-                  <p className="px-4 py-3 text-[11px] leading-relaxed text-muted">
-                    Turn on <b className="text-ink/80">Advanced mode</b> to change conversion, placement, lapse and commission assumptions.
-                  </p>
+            ) : (
+              <>
+                <div className="flex shrink-0 gap-1 px-4 pt-3">
+                  <Tabs value={tab} options={['Final Expense', 'Medicare', 'Other']} onChange={setTab} />
                 </div>
-              ) : (
-                <>
-                  <div className="flex shrink-0 border-b border-line p-2">
-                    {(['Final Expense', 'Medicare', 'Other'] as Tab[]).map((t) => {
-                      const col = t === 'Final Expense' ? C.fe : t === 'Medicare' ? C.md : C.net;
-                      return (
-                        <button key={t} onClick={() => setTab(t)}
-                          className={`flex-1 rounded-md py-1.5 text-[12px] font-medium ${tab === t ? 'bg-surface2 text-ink' : 'text-muted hover:text-ink'}`}
-                          style={tab === t ? { boxShadow: `inset 0 -2px 0 ${col}` } : undefined}>{t}</button>
-                      );
-                    })}
-                  </div>
-                  {tab === 'Final Expense' && <div>{FE_BASIC.map((c) => ctl(c, C.fe))}<Section color={C.fe}>Advanced</Section>{FE_ADV.map((c) => ctl(c, C.fe))}</div>}
-                  {tab === 'Medicare' && (
-                    <div>
-                      {MD_BASIC.map((c) => ctl(c, C.md))}<Section color={C.md}>Advanced</Section>{MD_ADV.map((c) => ctl(c, C.md))}
-                      <p className="px-4 py-2 text-[11px] text-muted">Selling months: {MD_MONTHS.join(', ')}.</p>
-                    </div>
-                  )}
-                  {tab === 'Other' && <div>{SHARED_CTLS.map((c) => ctl(c, C.net))}</div>}
-                </>
-              )}
+                {tab === 'Final Expense' && <div>{FE_BASIC.map((c) => ctl(c, C.fe, true))}<Section color={C.fe}>Advanced</Section>{FE_ADV.map((c) => ctl(c, C.fe, true))}</div>}
+                {tab === 'Medicare' && <div>{MD_BASIC.map((c) => ctl(c, C.md, true))}<Section color={C.md}>Advanced</Section>{MD_ADV.map((c) => ctl(c, C.md, true))}</div>}
+                {tab === 'Other' && <div className="pt-2">{SHARED_CTLS.map((c) => ctl(c, C.net))}</div>}
+              </>
+            )}
+          </Card>
+
+          {/* main */}
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <Card className="flex h-[128px] shrink-0">
+              <div className="w-[250px] shrink-0"><Hero out={out} /></div>
+              {out.years.map((y, i) => <YearTile key={i} i={i} y={y} />)}
             </Card>
 
-            {/* center */}
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="flex h-[100px] shrink-0 gap-3">
-                {out.years.map((y, i) => <Kpi key={i} title={`Year ${i + 1} Net`} net={y.totalNet} rev={y.totalRev} margin={y.margin} accent={C.net} />)}
-                <Kpi title="3-Year Cumulative Net" net={out.cumulative.totalNet} rev={out.cumulative.totalRev} margin={out.cumulative.margin} accent={C.gold} />
+            <Card className="flex min-h-0 flex-1 flex-col p-4">
+              <div className="mb-3 flex items-center gap-3">
+                <Tabs value={view} options={['By year', 'FE by month', 'Medicare', 'Table']} onChange={setView} />
+                {view === 'FE by month' && <span className="ml-auto" />}
+                {view === 'FE by month' && <Btn onClick={() => setModal('month')}>Month detail</Btn>}
               </div>
-
-              <Card className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-3">
-                <div className="mb-2 flex items-center justify-between px-1">
-                  <Segmented value={chart} options={['Big picture', 'Final Expense by month', 'Medicare by year']} onChange={setChart}
-                    accent={chart === 'Medicare by year' ? C.md : C.fe} />
-                  <span className="ml-3 mr-auto text-[12px] text-muted">{CHART_CAPTION[chart]}</span>
-                  {chart === 'Final Expense by month' && <Btn onClick={() => setModal('month')}>Month detail ⤢</Btn>}
-                </div>
-                <div className="min-h-0 flex-1">
-                  {chart === 'Big picture' && <OverviewChart out={out} />}
-                  {chart === 'Final Expense by month' && <FeMonthlyChart out={out} />}
-                  {chart === 'Medicare by year' && <MedicareChart out={out} />}
-                </div>
-              </Card>
-
-              <Card className="shrink-0 px-4 py-2">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="h-[22px] text-[11px] uppercase tracking-wider text-muted">
-                      <th className="text-left font-medium">Overall Outlook</th>
-                      {[1, 2, 3].map((y) => <th key={y} className="w-[150px] text-right font-medium">Year {y}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {SUMMARY_ROWS.map(([k, label, style]) => (
-                      <tr key={k} className={`h-[22px] ${style ? 'border-t border-line/60' : ''} ${style === 'n' ? 'font-semibold' : ''}`}>
-                        <td className={`${style === 'n' ? 'text-ink' : style === 't' ? 'text-ink/90' : 'pl-3 text-muted'}`}>
-                          {style === 'n' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k === 'totalNet' ? C.net : k === 'feNet' ? C.fe : C.md }} />}
-                          {label}
-                        </td>
-                        {out.years.map((y, i) => (
-                          <td key={i} className={`text-right ${y[k] < 0 ? 'text-cost' : style === 'n' ? 'text-ink' : 'text-ink/80'}`}>{money(y[k])}</td>
-                        ))}
+              <div className="min-h-0 flex-1">
+                {view === 'By year' && <OverviewChart out={out} />}
+                {view === 'FE by month' && <FeMonthlyChart out={out} />}
+                {view === 'Medicare' && <MedicareChart out={out} />}
+                {view === 'Table' && (
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="h-9 border-b border-line text-[12px] text-muted">
+                        <th className="text-left font-medium" />
+                        {[1, 2, 3].map((y) => <th key={y} className="w-[22%] text-right font-medium">Year {y}</th>)}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            </div>
-
-            {/* right: partners */}
-            <div className="flex w-[360px] shrink-0 flex-col gap-3">
-              <Card className="flex flex-col p-3">
-                <div className="mb-2 flex items-center justify-between px-1">
-                  <h3 className="text-[13px] font-semibold">Partners</h3>
-                  <span className="text-[11px] text-muted">Net income · {taxLabel}</span>
-                </div>
-                {!splitsOk && (
-                  <div className="mb-2 rounded-md border border-cost/40 bg-cost/10 px-2 py-1 text-[11px] text-cost">
-                    Splits total {num1(out.splitTotal * 100)}%. They must equal 100% to show partner income.
-                  </div>
-                )}
-                <div className="flex flex-col gap-2">
-                  {out.partners.map((p, i) => (
-                    <div key={i} className="rounded-lg border border-line/70 bg-surface2/40 px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PARTNER_COLORS[i] }} />
-                        {nameInput(i, 'h-6 flex-1 text-[13px] font-medium')}
-                        {splitInput(i, 'h-6 w-[76px]')}
-                      </div>
-                      <div className={`mt-1.5 flex items-end gap-3 ${splitsOk ? '' : 'opacity-25 blur-[2px]'}`}>
-                        <div className="grid flex-1 grid-cols-3 gap-x-2 text-[11px]">
-                          {p.yearly.map((v, y) => (
-                            <div key={y}>
-                              <div className="text-muted">Y{y + 1}</div>
-                              <div className={v < 0 ? 'text-cost' : 'text-ink/90'} title={money(v)}>{compact(v)}</div>
-                            </div>
+                    </thead>
+                    <tbody>
+                      {SUMMARY_ROWS.map(([k, label, style]) => (
+                        <tr key={k} className={`h-[34px] ${style === 'n' ? 'border-b border-line font-semibold' : ''}`}>
+                          <td className={style === 'n' ? 'text-ink' : style === 't' ? 'text-sub' : 'pl-4 text-muted'}>{label}</td>
+                          {out.years.map((y, i) => (
+                            <td key={i} className={`text-right ${y[k] < 0 ? 'text-cost' : style ? 'text-ink' : 'text-sub'}`}>{money(y[k])}</td>
                           ))}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] uppercase tracking-wider text-muted">3-yr</div>
-                          <div className={`text-[15px] font-semibold ${p.total < 0 ? 'text-cost' : 'text-net'}`} title={money(p.total)}>{compact(p.total)}</div>
-                        </div>
-                        <Sparkline values={p.yearly} color={PARTNER_COLORS[i]} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className="flex-1 p-3">
-                <h3 className="mb-2 px-1 text-[13px] font-semibold">Unit Economics</h3>
-                <div className="flex flex-col text-[12px]">
-                  <UnitRow label="FE net per placed policy" values={[money(out.unit.feNetPerPlaced)]} color={C.fe} />
-                  <UnitRow label="Medicare net per placed policy" values={[money(out.unit.mdNetPerPlaced)]} color={C.md} />
-                  <UnitRow label="FE agents needed" sub={['M12', 'M24', 'M36']} values={out.unit.feAgentsAt.map(int)} color={C.fe} />
-                  <UnitRow label="Medicare agents" sub={['Y1', 'Y2', 'Y3']} values={out.unit.mdAgents.map(int)} color={C.md} />
-                  <UnitRow label="FE policies placed" sub={['Y1', 'Y2', 'Y3']} values={out.unit.fePlacedPerYear.map(int)} color={C.fe} />
-                  <UnitRow label="FE months 10–12 unpaid after M36" values={[money(out.unit.receivableAfter36)]} color={C.gold} />
-                </div>
-              </Card>
-            </div>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </Card>
           </div>
 
-          {modal === 'notes' && (
-            <Modal title="Model notes" onClose={() => setModal(null)} width={920}>
-              <div className="grid grid-cols-[1.4fr_1fr] gap-6 text-[12.5px] leading-relaxed">
-                <div>
-                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-fe">Math corrections vs the original spreadsheet</h3>
-                  <ol className="list-decimal space-y-2 pl-4 text-ink/85">
-                    <li><b>Months 10–12 carry-over added.</b> The spreadsheet dropped the portion of months 2 and 3 policies paid in the following year (months 13–14 and 25–26). Every tail payment is now placed in the month it is actually received. At defaults, Year 2 FE Months 10–12 goes from $684,797.30 to $703,305.33, and Year 3 from $1,499,150.84 to $1,591,691.01.</li>
-                    <li><b>Fixed two broken cells.</b> A hardcoded 18508 in B18 and wrong-column references in D18, O18 and P18 are replaced by the payment schedule.</li>
-                    <li><b>Hardcoded rates made into controls.</b> Every FE 0.7 retention factor now follows the FE Lapse Rate: (1 − feLapse), in months 10–12 and renewals. Every Medicare 0.7 residual factor now follows the Medicare Lapse Rate: (1 − mdLapse), 80% at defaults. The $780 commission, 75% advance, 5% renewal, 2% retention cost and 20.86 working days are now controls.</li>
-                    <li><b>Effect on totals at defaults.</b> Total Net Year 2 goes from $4,039,068.04 to $4,223,303.67, and Year 3 from $8,454,977.68 to $9,127,644.00. Year 1 is unchanged.</li>
-                  </ol>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-md">Assumptions</h3>
-                  <ul className="list-disc space-y-2 pl-4 text-ink/85">
-                    <li>FE commissions are 75% advanced; the remaining 25% is paid as earned in policy months 10–12 on active policies.</li>
-                    <li>Renewals are paid as earned.</li>
-                    <li>Medicare runs 5 selling months per year (Oct, Nov, Jan, Feb, Mar).</li>
-                    <li>Retention cost is a percentage of revenue.</li>
-                    <li>Partner figures are before tax unless a holdback is set.</li>
-                    <li>Any retention factor is (1 − that line's lapse rate): FE uses the FE lapse rate, Medicare the Medicare lapse rate.</li>
-                  </ul>
-                </div>
+          {/* partners + unit economics */}
+          <div className="flex w-[400px] shrink-0 flex-col gap-4">
+            <Card className="px-4 py-5">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="text-[14px] font-semibold">Partner payouts</h2>
+                <span className="text-[12px] text-muted">{inputs.holdback === 0 ? 'pre-tax' : `after ${pct(inputs.holdback)} holdback`}</span>
               </div>
-            </Modal>
-          )}
-
-          {modal === 'month' && (
-            <Modal title="FE month detail" onClose={() => setModal(null)} width={1540}>
-              <div className="mb-3"><Segmented value={detailYear} options={['Year 1', 'Year 2', 'Year 3']} onChange={setDetailYear} /></div>
-              <table className="w-full text-[11px]">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="h-7 text-muted">
-                    <th className="text-left font-medium">Row</th>
-                    {out.fe.slice((+detailYear.slice(-1) - 1) * 12, +detailYear.slice(-1) * 12).map((r) => <th key={r.month} className="text-right font-medium">M{r.month}</th>)}
+                  <tr className="h-7 text-[12px] text-muted">
+                    <th className="text-left font-medium">Partner</th>
+                    <th className="w-[60px] text-right font-medium">Split</th>
+                    <th className="w-[58px] text-right font-medium">Year 1</th>
+                    <th className="w-[58px] text-right font-medium">Year 2</th>
+                    <th className="w-[58px] text-right font-medium">Year 3</th>
+                    <th className="w-[64px] text-right font-medium">3-year</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {FE_ROWS.map(([k, label, kind]) => (
-                    <tr key={k} className={`h-[26px] border-t border-line/50 ${k === 'net' || k === 'totalCost' ? 'font-semibold' : ''}`}>
-                      <td className="whitespace-nowrap pr-3 text-muted">{label}</td>
-                      {out.fe.slice((+detailYear.slice(-1) - 1) * 12, +detailYear.slice(-1) * 12).map((r) => (
-                        <td key={r.month} className={`text-right ${r[k] < 0 ? 'text-cost' : 'text-ink/90'}`}>{fmt(kind, r[k])}</td>
-                      ))}
+                  {out.partners.map((p, i) => (
+                    <tr key={i} className="h-10 border-t border-line/70">
+                      <td>
+                        <input aria-label={`Partner ${i + 1} name`} value={names[i]} onChange={(e) => setName(i, e.target.value)} maxLength={24}
+                          className="w-full min-w-0 rounded bg-transparent py-1 font-medium text-ink outline-none hover:bg-surface2 focus:bg-surface2" />
+                      </td>
+                      <td className="text-right">
+                        <span className={`inline-flex h-7 w-[56px] items-center rounded-md bg-surface2 px-1.5 ring-1 ${splitsOk ? 'ring-line' : 'ring-cost'}`}>
+                          <input type="number" aria-label={`${names[i]} split`} min={0} max={100} step={0.5} value={+(inputs[SPLIT_KEYS[i]] * 100).toFixed(4)}
+                            onChange={(e) => Number.isFinite(e.target.valueAsNumber) && setInput(SPLIT_KEYS[i], clamp(e.target.valueAsNumber, 0, 100) / 100)}
+                            className="w-full min-w-0 bg-transparent text-right outline-none" />
+                          <span className="text-muted">%</span>
+                        </span>
+                      </td>
+                      {splitsOk ? (
+                        <>
+                          {p.yearly.map((v, y) => <td key={y} title={money(v)} className={`text-right ${v < 0 ? 'text-cost' : 'text-sub'}`}>{compact(v)}</td>)}
+                          <td title={money(p.total)} className={`text-right font-semibold ${p.total < 0 ? 'text-cost' : 'text-ink'}`}>{compact(p.total)}</td>
+                        </>
+                      ) : <td colSpan={4} className="text-right text-muted">—</td>}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </Modal>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+              {!splitsOk && (
+                <div className="mt-3 rounded-md bg-cost/10 px-3 py-2 text-[12px] text-cost">
+                  Splits add up to {num1(out.splitTotal * 100)}%. Make them total 100% to see payouts.
+                </div>
+              )}
+            </Card>
 
-function UnitRow({ label, values, sub, color }: { label: string; values: string[]; sub?: string[]; color: string }) {
-  return (
-    <div className="flex min-h-[30px] items-center border-b border-line/40 px-1 py-1 last:border-0">
-      <span className="h-3 w-0.5 shrink-0 rounded-full" style={{ background: color }} />
-      <span className="ml-2 flex-1 text-muted">{label}</span>
-      <div className="flex gap-3">
-        {values.map((v, i) => (
-          <div key={i} className="min-w-[46px] text-right">
-            {sub && <div className="text-[9px] uppercase text-muted">{sub[i]}</div>}
-            <div className="text-ink/90">{v}</div>
+            <Card className="flex-1 p-5">
+              <h2 className="mb-3 text-[14px] font-semibold">Unit economics</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="FE net per policy" value={money(out.unit.feNetPerPlaced)} />
+                <Stat label="Medicare net per policy" value={money(out.unit.mdNetPerPlaced)} />
+                <Stat label="FE agents needed" value={out.unit.feAgentsAt.map(int).join(' / ')} sub="Month 12 / 24 / 36" />
+                <Stat label="Medicare agents" value={out.unit.mdAgents.map(int).join(' / ')} sub="Year 1 / 2 / 3" />
+                <Stat label="FE policies placed" value={out.unit.fePlacedPerYear.map(int).join(' / ')} sub="Year 1 / 2 / 3" className="col-span-2" />
+                <Stat label="FE months 10–12 still owed after month 36" value={money(out.unit.receivableAfter36)} className="col-span-2" />
+              </div>
+            </Card>
           </div>
-        ))}
+        </div>
+
+        {modal === 'notes' && (
+          <Modal title="Model notes" onClose={() => setModal(null)} width={960}>
+            <div className="grid grid-cols-[1.4fr_1fr] gap-8 text-[13px] leading-relaxed">
+              <div>
+                <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Math corrections vs the original spreadsheet</h3>
+                <ol className="list-decimal space-y-2 pl-4 text-sub">
+                  <li><b className="text-ink">Months 10–12 carry-over added.</b> The spreadsheet dropped the portion of months 2 and 3 policies paid in the following year (months 13–14 and 25–26). Every tail payment is now placed in the month it is actually received. At defaults, Year 2 FE Months 10–12 goes from $684,797.30 to $703,305.33, and Year 3 from $1,499,150.84 to $1,591,691.01.</li>
+                  <li><b className="text-ink">Fixed two broken cells.</b> A hardcoded 18508 in B18 and wrong-column references in D18, O18 and P18 are replaced by the payment schedule.</li>
+                  <li><b className="text-ink">Hardcoded rates made into controls.</b> Every FE 0.7 retention factor now follows the FE Lapse Rate: (1 − feLapse), in months 10–12 and renewals. Every Medicare 0.7 residual factor now follows the Medicare Lapse Rate: (1 − mdLapse), 80% at defaults. The $780 commission, 75% advance, 5% renewal, 2% retention cost and 20.86 working days are now controls.</li>
+                  <li><b className="text-ink">Effect on totals at defaults.</b> Total Net Year 2 goes from $4,039,068.04 to $4,223,303.67, and Year 3 from $8,454,977.68 to $9,127,644.00. Year 1 is unchanged.</li>
+                </ol>
+              </div>
+              <div>
+                <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Assumptions</h3>
+                <ul className="list-disc space-y-2 pl-4 text-sub">
+                  <li>FE commissions are 75% advanced; the remaining 25% is paid as earned in policy months 10–12 on active policies.</li>
+                  <li>Renewals are paid as earned.</li>
+                  <li>Medicare runs 5 selling months per year ({MD_MONTHS.join(', ')}).</li>
+                  <li>Retention cost is a percentage of revenue.</li>
+                  <li>Partner figures are before tax unless a holdback is set.</li>
+                  <li>Any retention factor is (1 − that line's lapse rate).</li>
+                </ul>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {modal === 'month' && (
+          <Modal title="Final Expense month detail" onClose={() => setModal(null)} width={1400}>
+            <div className="mb-3"><Tabs value={detailYear} options={['Year 1', 'Year 2', 'Year 3']} onChange={setDetailYear} /></div>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="h-8 text-muted">
+                  <th className="text-left font-medium" />
+                  {detailMonths.map((r) => <th key={r.month} className="text-right font-medium">Mo {r.month}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {FE_ROWS.map(([k, label, kind]) => (
+                  <tr key={k} className={`h-[28px] border-t border-line/60 ${k === 'net' || k === 'totalCost' ? 'font-semibold text-ink' : 'text-sub'}`}>
+                    <td className="whitespace-nowrap pr-3 text-muted">{label}</td>
+                    {detailMonths.map((r) => <td key={r.month} className={`text-right ${r[k] < 0 ? 'text-cost' : ''}`}>{fmt(kind, r[k])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Modal>
+        )}
       </div>
     </div>
   );

@@ -1,149 +1,133 @@
 import {
-  Area, Bar, CartesianGrid, ComposedChart, LabelList, Legend, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, Bar, CartesianGrid, ComposedChart, LabelList, Legend, Line, ReferenceArea, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import type { Outputs } from './engine/model';
-import { compact, fmt, FE_ROWS, MD_ROWS, money, type Kind } from './format';
+import { compact, fmt, FE_ROWS, MD_ROWS, type Kind } from './format';
 
+// Validated (dataviz validator, dark, surface #161618): fe / md / net pass CVD + contrast. Costs are neutral on purpose.
 export const C = {
-  fe: '#2dd4bf', feTail: '#5eead4', feRenew: '#99f6e4',
-  md: '#8b5cf6', mdResid: '#c4b5fd',
-  net: '#34d399', cost: '#fb7185', grid: '#1c2742', muted: '#8392b0', gold: '#fbbf24',
+  fe: '#3987e5', feLight: '#86b6ef',
+  md: '#d95926', mdLight: '#f0a27f',
+  net: '#199e70', cost: '#5b5b64',
+  surface: '#161618', grid: '#26262b', muted: '#8b8b94', ink: '#f4f4f5', neg: '#e66767',
 };
 
 const axis = { stroke: C.muted, fontSize: 12, tickLine: false, axisLine: false } as const;
-const legend = { wrapperStyle: { fontSize: 12, color: C.muted, paddingTop: 6 }, iconSize: 10, itemSorter: null } as const;
-const label = (color: string) => ({ position: 'top' as const, formatter: (v: unknown) => compact(Number(v)), fill: color, fontSize: 12, fontWeight: 600 });
+const legend = { verticalAlign: 'top' as const, align: 'right' as const, iconType: 'circle' as const, iconSize: 8, itemSorter: null, wrapperStyle: { fontSize: 12, color: C.muted, paddingBottom: 12 } };
+const bar = { isAnimationActive: false, stroke: C.surface, strokeWidth: 2 } as const;
+const topLabel = { position: 'top' as const, formatter: (v: unknown) => compact(Number(v)), fill: C.ink, fontSize: 12, fontWeight: 600 };
+
+// Sizes charts in layout pixels. Recharts' ResponsiveContainer can measure the CSS-scaled (screen) size and overflow.
+function Fit({ children }: { children: (w: number, h: number) => ReactElement }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [s, setS] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const ro = new ResizeObserver(() => setS({ w: el.offsetWidth, h: el.offsetHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return <div ref={ref} className="h-full w-full overflow-hidden">{s.w > 0 && children(s.w, s.h)}</div>;
+}
 
 function Tip({ title, rows }: { title: string; rows: [string, Kind, number, string?][] }) {
   return (
-    <div className="rounded-lg border border-line bg-canvas/95 px-3 py-2 text-[11px] leading-[15px] shadow-2xl backdrop-blur">
-      <div className="mb-1 font-semibold text-ink">{title}</div>
+    <div className="min-w-[220px] rounded-lg border border-line bg-surface2 px-3 py-2.5 text-[12px] leading-[18px] shadow-2xl">
+      <div className="mb-1.5 font-semibold text-ink">{title}</div>
       {rows.map(([l, k, v, color]) => (
-        <div key={l} className="flex justify-between gap-6">
-          <span className="text-muted" style={color ? { color } : undefined}>{l}</span>
-          <span className={v < 0 ? 'text-cost' : 'text-ink'}>{fmt(k, v)}</span>
+        <div key={l} className="flex items-center justify-between gap-6">
+          <span className="flex items-center gap-2 text-muted">
+            {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} />}{l}
+          </span>
+          <span className={`tnum ${v < 0 ? 'text-cost' : 'text-ink'}`}>{fmt(k, v)}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// Per year: revenue (stacked by business line) next to costs and net profit.
 export function OverviewChart({ out }: { out: Outputs }) {
   const data = out.years.map((y, i) => ({ name: `Year ${i + 1}`, ...y }));
   return (
-    <ResponsiveContainer>
-      <ComposedChart data={data} margin={{ top: 24, right: 12, left: 0, bottom: 0 }} barGap={8} barCategoryGap="22%">
+    <Fit>{(w, h) => (
+      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={6} barCategoryGap="24%">
         <CartesianGrid stroke={C.grid} vertical={false} />
-        <XAxis dataKey="name" {...axis} fontSize={13} />
-        <YAxis tickFormatter={compact} width={64} {...axis} />
-        <Tooltip
-          cursor={{ fill: '#ffffff08' }}
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null;
-            const y = payload[0].payload as (typeof data)[number];
-            return (
-              <Tip title={y.name} rows={[
-                ['FE advanced', '$', y.feAdv, C.fe], ['FE months 10–12', '$', y.feTail, C.fe], ['FE renewals', '$', y.feRenew, C.fe],
-                ['Medicare new', '$', y.mdNew, C.md], ['Medicare residual', '$', y.mdResid, C.md],
-                ['Total revenue', '$', y.totalRev], ['Total costs', '$', y.totalCost, C.cost], ['Net profit', '$', y.totalNet, C.net],
-              ]} />
-            );
-          }}
-        />
+        <XAxis dataKey="name" {...axis} fontSize={13} tick={{ fill: C.ink }} dy={6} />
+        <YAxis tickFormatter={compact} width={60} {...axis} />
+        <Tooltip cursor={{ fill: '#ffffff06' }} content={({ active, payload }) => {
+          if (!active || !payload?.length) return null;
+          const y = payload[0].payload as (typeof data)[number];
+          return <Tip title={y.name} rows={[
+            ['Final Expense revenue', '$', y.feRev, C.fe], ['Medicare revenue', '$', y.mdRev, C.md],
+            ['Costs', '$', y.totalCost, C.cost], ['Net profit', '$', y.totalNet, C.net],
+          ]} />;
+        }} />
         <Legend {...legend} />
-        <Bar dataKey="feRev" name="Final Expense revenue" stackId="rev" fill={C.fe} isAnimationActive={false} />
-        <Bar dataKey="mdRev" name="Medicare revenue" stackId="rev" fill={C.md} isAnimationActive={false} minPointSize={1} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="totalRev" {...label('#e6ebf5')} />
+        <Bar dataKey="feRev" name="Final Expense revenue" stackId="rev" fill={C.fe} {...bar} />
+        <Bar dataKey="mdRev" name="Medicare revenue" stackId="rev" fill={C.md} {...bar} minPointSize={1} radius={[4, 4, 0, 0]}>
+          <LabelList dataKey="totalRev" {...topLabel} />
         </Bar>
-        <Bar dataKey="totalCost" name="Costs" fill={C.cost} isAnimationActive={false} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="totalCost" {...label(C.cost)} />
-        </Bar>
-        <Bar dataKey="totalNet" name="Net profit" fill={C.net} isAnimationActive={false} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="totalNet" {...label(C.net)} />
+        <Bar dataKey="totalCost" name="Costs" fill={C.cost} {...bar} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="totalNet" name="Net profit" fill={C.net} {...bar} radius={[4, 4, 0, 0]}>
+          <LabelList dataKey="totalNet" {...topLabel} />
         </Bar>
       </ComposedChart>
-    </ResponsiveContainer>
+    )}</Fit>
   );
 }
 
-// 36 months: cash in (advances + months 10–12 payments) vs cost, with net profit.
 export function FeMonthlyChart({ out }: { out: Outputs }) {
   const data = out.fe.map((r) => ({ ...r, name: `M${r.month}` }));
   return (
-    <ResponsiveContainer>
-      <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-        {[0, 1, 2].map((y) => (
-          <ReferenceArea key={y} x1={`M${12 * y + 1}`} x2={`M${12 * y + 12}`} fill={y % 2 ? '#ffffff' : C.fe} fillOpacity={0.035}
-            label={{ value: `Year ${y + 1}`, position: 'insideTopLeft', fill: C.muted, fontSize: 12 }} />
-        ))}
+    <Fit>{(w, h) => (
+      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        {[1].map((y) => <ReferenceArea key={y} x1={`M${12 * y + 1}`} x2={`M${12 * y + 12}`} fill="#ffffff" fillOpacity={0.025} />)}
         <CartesianGrid stroke={C.grid} vertical={false} />
-        <XAxis dataKey="name" interval={2} {...axis} />
-        <YAxis tickFormatter={compact} width={64} {...axis} />
-        <Tooltip
-          cursor={{ stroke: C.muted, strokeDasharray: '3 3' }}
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null;
-            const r = payload[0].payload as (typeof data)[number];
-            return <Tip title={`Month ${r.month} · Year ${Math.ceil(r.month / 12)}`} rows={FE_ROWS.map(([k, l, kind]) => [l, kind, r[k]])} />;
-          }}
-        />
+        <XAxis dataKey="name" {...axis} ticks={['M1', 'M6', 'M12', 'M13', 'M18', 'M24', 'M25', 'M30', 'M36']}
+          tickFormatter={(v: string) => (v === 'M1' ? 'Year 1' : v === 'M13' ? 'Year 2' : v === 'M25' ? 'Year 3' : v.replace('M', 'Mo '))} dy={6} />
+        <YAxis tickFormatter={compact} width={60} {...axis} />
+        <Tooltip cursor={{ stroke: C.muted, strokeDasharray: '3 3' }} content={({ active, payload }) => {
+          if (!active || !payload?.length) return null;
+          const r = payload[0].payload as (typeof data)[number];
+          return <Tip title={`Month ${r.month} · Year ${Math.ceil(r.month / 12)}`} rows={FE_ROWS.map(([k, l, kind]) => [l, kind, r[k]])} />;
+        }} />
         <Legend {...legend} />
-        <Area dataKey="advRev" name="Advanced commissions" stackId="in" stroke={C.fe} fill={C.fe} fillOpacity={0.35} isAnimationActive={false} />
-        <Area dataKey="tailCash" name="Months 10–12 payments" stackId="in" stroke={C.gold} fill={C.gold} fillOpacity={0.35} isAnimationActive={false} />
-        <Line dataKey="totalCost" name="Costs" stroke={C.cost} strokeWidth={2} dot={false} isAnimationActive={false} />
-        <Line dataKey="net" name="Net profit" stroke={C.net} strokeWidth={3} dot={false} isAnimationActive={false} />
+        <Area dataKey="advRev" name="Advanced commissions" stackId="in" stroke={C.fe} strokeWidth={2} fill={C.fe} fillOpacity={0.25} isAnimationActive={false} />
+        <Area dataKey="tailCash" name="Months 10–12 payments" stackId="in" stroke={C.feLight} strokeWidth={2} fill={C.feLight} fillOpacity={0.2} isAnimationActive={false} />
+        <Line dataKey="totalCost" name="Costs" stroke="#9a9aa3" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+        <Line dataKey="net" name="Net profit" stroke={C.net} strokeWidth={2.5} dot={false} isAnimationActive={false} />
       </ComposedChart>
-    </ResponsiveContainer>
+    )}</Fit>
   );
 }
 
-// Per year: new + residual revenue vs costs and net. Tooltip adds the per-selling-month rows.
 export function MedicareChart({ out }: { out: Outputs }) {
   const data = out.years.map((y, i) => ({ name: `Year ${i + 1}`, ...y, month: out.md[i] }));
   return (
-    <ResponsiveContainer>
-      <ComposedChart data={data} margin={{ top: 24, right: 12, left: 0, bottom: 0 }} barGap={8} barCategoryGap="24%">
+    <Fit>{(w, h) => (
+      <ComposedChart width={w} height={h} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={6} barCategoryGap="24%">
         <CartesianGrid stroke={C.grid} vertical={false} />
-        <XAxis dataKey="name" {...axis} fontSize={13} />
-        <YAxis tickFormatter={compact} width={64} {...axis} />
-        <Tooltip
-          cursor={{ fill: '#ffffff08' }}
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null;
-            const d = payload[0].payload as (typeof data)[number];
-            return (
-              <Tip title={`${d.name} · each of 5 selling months`} rows={[
-                ...MD_ROWS.map(([k, l, kind]) => [l, kind, d.month[k]] as [string, Kind, number]),
-                ['Year: new revenue', '$', d.mdNew, C.md], ['Year: residual revenue', '$', d.mdResid, C.mdResid], ['Year: net', '$', d.mdNet, C.net],
-              ]} />
-            );
-          }}
-        />
+        <XAxis dataKey="name" {...axis} fontSize={13} tick={{ fill: C.ink }} dy={6} />
+        <YAxis tickFormatter={compact} width={60} {...axis} />
+        <Tooltip cursor={{ fill: '#ffffff06' }} content={({ active, payload }) => {
+          if (!active || !payload?.length) return null;
+          const d = payload[0].payload as (typeof data)[number];
+          return <Tip title={`${d.name} · per selling month (×5)`} rows={[
+            ...MD_ROWS.map(([k, l, kind]) => [l, kind, d.month[k]] as [string, Kind, number]),
+            ['Year new revenue', '$', d.mdNew, C.md], ['Year residual revenue', '$', d.mdResid, C.mdLight], ['Year net profit', '$', d.mdNet, C.net],
+          ]} />;
+        }} />
         <Legend {...legend} />
-        <Bar dataKey="mdNew" name="New policy revenue" stackId="rev" fill={C.md} isAnimationActive={false} />
-        <Bar dataKey="mdResid" name="Residual revenue" stackId="rev" fill={C.mdResid} isAnimationActive={false} minPointSize={1} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="mdRev" {...label('#e6ebf5')} />
+        <Bar dataKey="mdNew" name="New policies" stackId="rev" fill={C.md} {...bar} />
+        <Bar dataKey="mdResid" name="Residuals" stackId="rev" fill={C.mdLight} {...bar} minPointSize={1} radius={[4, 4, 0, 0]}>
+          <LabelList dataKey="mdRev" {...topLabel} />
         </Bar>
-        <Bar dataKey="mdCosts" name="Costs" fill={C.cost} isAnimationActive={false} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="mdCosts" {...label(C.cost)} />
-        </Bar>
-        <Bar dataKey="mdNet" name="Net profit" fill={C.net} isAnimationActive={false} radius={[4, 4, 0, 0]}>
-          <LabelList dataKey="mdNet" {...label(C.net)} />
+        <Bar dataKey="mdCosts" name="Costs" fill={C.cost} {...bar} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="mdNet" name="Net profit" fill={C.net} {...bar} radius={[4, 4, 0, 0]}>
+          <LabelList dataKey="mdNet" {...topLabel} />
         </Bar>
       </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
-
-export function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(1, ...values.map(Math.abs));
-  return (
-    <div className="flex h-9 items-end gap-1">
-      {values.map((v, i) => (
-        <div key={i} title={`Year ${i + 1}: ${money(v)}`} className="w-3 rounded-sm"
-          style={{ height: `${Math.max(2, (Math.abs(v) / max) * 36)}px`, background: v < 0 ? C.cost : color, opacity: 0.55 + i * 0.2 }} />
-      ))}
-    </div>
+    )}</Fit>
   );
 }
