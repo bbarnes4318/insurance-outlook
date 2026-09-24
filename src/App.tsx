@@ -1,38 +1,40 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { DEFAULTS, MD_MONTHS, runModel, type InputKey, type Inputs, type Outputs } from './engine/model';
 import { FeMonthlyChart, MedicareChart, OverviewChart, Sparkline, C } from './Charts';
-import { compact, FE_ROWS, fmt, MD_ROWS, money, num1, pct, SUMMARY_ROWS } from './format';
+import { compact, FE_ROWS, fmt, int, MD_ROWS, money, num1, pct, SUMMARY_ROWS } from './format';
 
 // ---------- controls ----------
 type Unit = '$' | '%' | 'calls' | 'agents' | 'days';
 type Ctl = [InputKey, string, number, number, number, Unit]; // key, label, min, max, step (display units), unit
 
-const FE_CTLS: Ctl[] = [
+const FE_BASIC: Ctl[] = [
   ['feCallsStart', 'Calls per day (start)', 0, 2000, 10, 'calls'],
+  ['feCallCost', 'Cost per call', 0, 50, 0.25, '$'],
+  ['feCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
+];
+const FE_ADV: Ctl[] = [
   ['feCallsQtrInc', 'Calls per day quarterly increase', 0, 1000, 10, 'calls'],
   ['feConv', 'Conversion % (apps / calls)', 0, 50, 0.5, '%'],
   ['fePlace', 'Placement % (placed / apps)', 0, 100, 1, '%'],
-  ['fePayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
-  ['feCallCost', 'Cost per call', 0, 50, 0.25, '$'],
   ['feLapse', 'Lapse rate', 0, 80, 1, '%'],
-  ['feCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
-];
-const FE_TERMS: Ctl[] = [
   ['feComm', 'Avg first-year commission per policy', 100, 2000, 10, '$'],
   ['feAdvance', 'Advanced portion', 0, 100, 1, '%'],
   ['feRenew', 'Renewal rate', 0, 25, 0.5, '%'],
+  ['fePayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
 ];
-const MD_CTLS: Ctl[] = [
+const MD_BASIC: Ctl[] = [
   ['mdCallsPerAgent', 'Calls per agent per day', 1, 100, 1, 'calls'],
-  ['mdConv', 'Conversion %', 0, 50, 0.5, '%'],
-  ['mdPlace', 'Placement %', 0, 100, 1, '%'],
-  ['mdComm', 'Avg commission per policy', 0, 1500, 10, '$'],
-  ['mdPayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
   ['mdCallCost', 'Cost per call', 0, 50, 0.25, '$'],
-  ['mdLapse', 'Lapse rate', 0, 80, 1, '%'],
   ['mdAgentsY1', 'Agents – Year 1', 0, 500, 1, 'agents'],
   ['mdAgentsY2', 'Agents – Year 2', 0, 500, 1, 'agents'],
   ['mdAgentsY3', 'Agents – Year 3', 0, 500, 1, 'agents'],
+];
+const MD_ADV: Ctl[] = [
+  ['mdConv', 'Conversion %', 0, 50, 0.5, '%'],
+  ['mdPlace', 'Placement %', 0, 100, 1, '%'],
+  ['mdLapse', 'Lapse rate', 0, 80, 1, '%'],
+  ['mdComm', 'Avg commission per policy', 0, 1500, 10, '$'],
+  ['mdPayout', 'Agent payout per placed policy', 0, 500, 5, '$'],
 ];
 const SHARED_CTLS: Ctl[] = [
   ['workDays', 'Working days per month', 15, 26, 0.01, 'days'],
@@ -129,7 +131,7 @@ function Control({ ctl, value, onChange, accent }: { ctl: Ctl; value: number; on
   const set = (d: number) => onChange(fromDisplay(unit, clamp(d, min, max)));
   const fill = `${((clamp(shown, min, max) - min) / (max - min)) * 100}%`;
   return (
-    <div className="flex h-[60px] flex-col justify-center gap-1.5 border-b border-line/50 px-4">
+    <div className="flex h-[56px] flex-col justify-center gap-1 border-b border-line/50 px-4">
       <div className="flex items-center gap-2 text-[12px]">
         <span className="truncate text-ink/90">{label}</span>
         {changed && (
@@ -219,22 +221,38 @@ function Modal({ title, onClose, children, width }: { title: string; onClose: ()
 }
 
 // ---------- app ----------
-type Tab = 'Final Expense' | 'Medicare' | 'Shared';
-type ChartMode = '3-Year Overview' | 'FE Monthly' | 'Medicare Seasons';
+type Tab = 'Final Expense' | 'Medicare' | 'Other';
+type ChartMode = 'Big picture' | 'Final Expense by month' | 'Medicare by year';
+const CHART_CAPTION: Record<ChartMode, string> = {
+  'Big picture': 'Revenue, costs and net profit each year',
+  'Final Expense by month': 'Cash coming in vs costs, month by month',
+  'Medicare by year': 'Hover a year for the per-month breakdown',
+};
+
+const Section = ({ color, children }: { color: string; children: ReactNode }) => (
+  <div className="flex items-center gap-2 bg-surface2/50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
+    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />{children}
+  </div>
+);
 
 export default function App() {
   const [state, setState] = useState<State>(loadState);
   const { inputs, names } = state;
   const out = useMemo(() => runModel(inputs), [inputs]);
   const [tab, setTab] = useState<Tab>('Final Expense');
-  const [chart, setChart] = useState<ChartMode>('3-Year Overview');
+  const [advanced, setAdvanced] = useState(false);
+  const [chart, setChart] = useState<ChartMode>('Big picture');
   const [modal, setModal] = useState<null | 'notes' | 'month'>(null);
   const [detailYear, setDetailYear] = useState<'Year 1' | 'Year 2' | 'Year 3'>('Year 1');
   const [copied, setCopied] = useState(false);
-  const [scale, setScale] = useState(1);
+  const [view, setView] = useState({ s: 1, w: 1600, h: 900 });
 
   useEffect(() => {
-    const f = () => setScale(Math.min(innerWidth / 1600, innerHeight / 900));
+    // Scale so the design is at least 1440×900, then let the canvas fill the window exactly (no letterboxing).
+    const f = () => {
+      const s = Math.min(innerWidth / 1440, innerHeight / 900);
+      setView({ s, w: innerWidth / s, h: innerHeight / s });
+    };
     f();
     addEventListener('resize', f);
     return () => removeEventListener('resize', f);
@@ -267,9 +285,9 @@ export default function App() {
   );
 
   return (
-    <div className="grid h-full w-full place-items-center bg-bg">
-      <div style={{ width: 1600 * scale, height: 900 * scale }}>
-        <div className="relative flex h-[900px] w-[1600px] flex-col overflow-hidden bg-canvas text-ink" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+    <div className="h-full w-full bg-canvas">
+      <div>
+        <div className="relative flex flex-col overflow-hidden bg-canvas text-ink" style={{ width: view.w, height: view.h, transform: `scale(${view.s})`, transformOrigin: 'top left' }}>
           {/* top bar */}
           <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-5">
             <div className="flex items-center gap-2.5">
@@ -289,47 +307,48 @@ export default function App() {
 
           <div className="flex min-h-0 flex-1 gap-3 p-3">
             {/* left rail */}
-            <Card className="flex w-[360px] shrink-0 flex-col overflow-hidden">
-              <div className="flex border-b border-line p-2">
-                {(['Final Expense', 'Medicare', 'Shared'] as Tab[]).map((t) => {
-                  const col = t === 'Final Expense' ? C.fe : t === 'Medicare' ? C.md : C.net;
-                  return (
-                    <button key={t} onClick={() => setTab(t)}
-                      className={`flex-1 rounded-md py-1.5 text-[12px] font-medium ${tab === t ? 'bg-surface2 text-ink' : 'text-muted hover:text-ink'}`}
-                      style={tab === t ? { boxShadow: `inset 0 -2px 0 ${col}` } : undefined}>{t}</button>
-                  );
-                })}
+            <Card className="flex w-[340px] shrink-0 flex-col overflow-hidden">
+              <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-4">
+                <h3 className="text-[14px] font-semibold">Assumptions</h3>
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] text-muted">
+                  Advanced mode
+                  <button role="switch" aria-checked={advanced} onClick={() => setAdvanced(!advanced)}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${advanced ? 'bg-fe' : 'bg-line'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${advanced ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </label>
               </div>
-              {tab === 'Final Expense' && (
+              {!advanced ? (
                 <div>
-                  {FE_CTLS.map((c) => ctl(c, C.fe))}
-                  <div className="bg-surface2/50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-fe">FE commission terms</div>
-                  {FE_TERMS.map((c) => ctl(c, C.fe))}
+                  <Section color={C.fe}>Final Expense</Section>
+                  {FE_BASIC.map((c) => ctl(c, C.fe))}
+                  <Section color={C.md}>Medicare</Section>
+                  {MD_BASIC.map((c) => ctl(c, C.md))}
+                  <p className="px-4 py-3 text-[11px] leading-relaxed text-muted">
+                    Turn on <b className="text-ink/80">Advanced mode</b> to change conversion, placement, lapse and commission assumptions.
+                  </p>
                 </div>
-              )}
-              {tab === 'Medicare' && (
-                <div>
-                  {MD_CTLS.map((c) => ctl(c, C.md))}
-                  <div className="px-4 py-3 text-[11px] leading-relaxed text-muted">
-                    Selling months fixed at 5 per year: {MD_MONTHS.join(', ')}. Residual revenue follows (1 − lapse rate).
+              ) : (
+                <>
+                  <div className="flex shrink-0 border-b border-line p-2">
+                    {(['Final Expense', 'Medicare', 'Other'] as Tab[]).map((t) => {
+                      const col = t === 'Final Expense' ? C.fe : t === 'Medicare' ? C.md : C.net;
+                      return (
+                        <button key={t} onClick={() => setTab(t)}
+                          className={`flex-1 rounded-md py-1.5 text-[12px] font-medium ${tab === t ? 'bg-surface2 text-ink' : 'text-muted hover:text-ink'}`}
+                          style={tab === t ? { boxShadow: `inset 0 -2px 0 ${col}` } : undefined}>{t}</button>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-              {tab === 'Shared' && (
-                <div>
-                  {SHARED_CTLS.map((c) => ctl(c, C.net))}
-                  <div className="bg-surface2/50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-net">Partners &amp; splits</div>
-                  {names.map((_, i) => (
-                    <div key={i} className="flex h-[52px] items-center gap-3 border-b border-line/50 px-4">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PARTNER_COLORS[i] }} />
-                      {nameInput(i, 'h-7 flex-1 text-[13px]')}
-                      {splitInput(i, 'w-[92px]')}
+                  {tab === 'Final Expense' && <div>{FE_BASIC.map((c) => ctl(c, C.fe))}<Section color={C.fe}>Advanced</Section>{FE_ADV.map((c) => ctl(c, C.fe))}</div>}
+                  {tab === 'Medicare' && (
+                    <div>
+                      {MD_BASIC.map((c) => ctl(c, C.md))}<Section color={C.md}>Advanced</Section>{MD_ADV.map((c) => ctl(c, C.md))}
+                      <p className="px-4 py-2 text-[11px] text-muted">Selling months: {MD_MONTHS.join(', ')}.</p>
                     </div>
-                  ))}
-                  <div className={`px-4 py-2 text-[12px] ${splitsOk ? 'text-muted' : 'text-cost'}`}>
-                    Splits total {num1(out.splitTotal * 100)}%{splitsOk ? '' : ' — must equal 100%'}
-                  </div>
-                </div>
+                  )}
+                  {tab === 'Other' && <div>{SHARED_CTLS.map((c) => ctl(c, C.net))}</div>}
+                </>
               )}
             </Card>
 
@@ -342,15 +361,15 @@ export default function App() {
 
               <Card className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-3">
                 <div className="mb-2 flex items-center justify-between px-1">
-                  <Segmented value={chart} options={['3-Year Overview', 'FE Monthly', 'Medicare Seasons']} onChange={setChart}
-                    accent={chart === 'Medicare Seasons' ? C.md : C.fe} />
-                  {chart === 'FE Monthly' && <Btn onClick={() => setModal('month')}>Month detail ⤢</Btn>}
-                  {chart === 'Medicare Seasons' && <span className="text-[11px] text-muted">Values per selling month</span>}
+                  <Segmented value={chart} options={['Big picture', 'Final Expense by month', 'Medicare by year']} onChange={setChart}
+                    accent={chart === 'Medicare by year' ? C.md : C.fe} />
+                  <span className="ml-3 mr-auto text-[12px] text-muted">{CHART_CAPTION[chart]}</span>
+                  {chart === 'Final Expense by month' && <Btn onClick={() => setModal('month')}>Month detail ⤢</Btn>}
                 </div>
                 <div className="min-h-0 flex-1">
-                  {chart === '3-Year Overview' && <OverviewChart out={out} />}
-                  {chart === 'FE Monthly' && <FeMonthlyChart out={out} />}
-                  {chart === 'Medicare Seasons' && <MedicareChart out={out} />}
+                  {chart === 'Big picture' && <OverviewChart out={out} />}
+                  {chart === 'Final Expense by month' && <FeMonthlyChart out={out} />}
+                  {chart === 'Medicare by year' && <MedicareChart out={out} />}
                 </div>
               </Card>
 
@@ -424,9 +443,9 @@ export default function App() {
                 <div className="flex flex-col text-[12px]">
                   <UnitRow label="FE net per placed policy" values={[money(out.unit.feNetPerPlaced)]} color={C.fe} />
                   <UnitRow label="Medicare net per placed policy" values={[money(out.unit.mdNetPerPlaced)]} color={C.md} />
-                  <UnitRow label="FE agents needed" sub={['M12', 'M24', 'M36']} values={out.unit.feAgentsAt.map(num1)} color={C.fe} />
-                  <UnitRow label="Medicare agents" sub={['Y1', 'Y2', 'Y3']} values={out.unit.mdAgents.map(num1)} color={C.md} />
-                  <UnitRow label="FE policies placed" sub={['Y1', 'Y2', 'Y3']} values={out.unit.fePlacedPerYear.map((v) => Math.round(v).toLocaleString('en-US'))} color={C.fe} />
+                  <UnitRow label="FE agents needed" sub={['M12', 'M24', 'M36']} values={out.unit.feAgentsAt.map(int)} color={C.fe} />
+                  <UnitRow label="Medicare agents" sub={['Y1', 'Y2', 'Y3']} values={out.unit.mdAgents.map(int)} color={C.md} />
+                  <UnitRow label="FE policies placed" sub={['Y1', 'Y2', 'Y3']} values={out.unit.fePlacedPerYear.map(int)} color={C.fe} />
                   <UnitRow label="FE months 10–12 unpaid after M36" values={[money(out.unit.receivableAfter36)]} color={C.gold} />
                 </div>
               </Card>

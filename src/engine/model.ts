@@ -89,7 +89,9 @@ export interface YearSummary {
   mdRev: number;
   mdRetention: number;
   mdNet: number;
+  mdCosts: number; // everything between Medicare revenue and Medicare net (mdRev − mdNet)
   totalRev: number;
+  totalCost: number; // totalRev − totalNet
   totalNet: number;
   margin: number;
   fePlaced: number;
@@ -232,8 +234,10 @@ export function runModel(i: Inputs): Outputs {
       mdRev,
       mdRetention,
       mdNet,
+      mdCosts: mdRev - mdNet,
       totalRev,
       totalNet,
+      totalCost: totalRev - totalNet,
       margin: div(totalNet, totalRev),
       fePlaced: sum(yr(y).map((r) => r.totalPlaced)),
     };
