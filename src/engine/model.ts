@@ -380,3 +380,83 @@ export function runModel(i: Inputs): Outputs {
     },
   };
 }
+
+// ---------- reverse model: "I want $X a month — what does it take?" ----------
+// Steady-state, first-year economics per placed policy. Renewals and Medicare residuals are left out
+// of the recipe (conservative) and reported separately as upside.
+export interface LineRecipe {
+  perPolicy: { revenue: number; payout: number; calls: number; chargeback: number; retention: number; net: number };
+  target: number; // company net this line must produce per selling month
+  policiesMo: number;
+  policiesDay: number;
+  appsDay: number;
+  callsDay: number;
+  agents: number; // whole people
+  revenue: number; // per selling month
+  payouts: number;
+  callCost: number;
+  chargebacks: number;
+  retention: number;
+}
+export interface Recipe {
+  feasible: boolean;
+  companyNet: number; // monthly, averaged over the year
+  fe: LineRecipe;
+  md: LineRecipe; // per selling month (5 a year)
+  youEarly: number; // your monthly take in months 1–9, before FE months 10–12 payments arrive
+  upside: number; // extra to you per month from year 2: FE renewals + Medicare residuals
+  feMonthReached: number | null; // first plan month whose FE calls/day covers the recipe
+}
+
+export function recipe(i: Inputs, goal: number, share: number, feMix: number): Recipe {
+  const D = i.workDays;
+  const keepShare = share * (1 - i.holdback);
+  const companyNet = keepShare > 0 ? goal / keepShare : Infinity;
+  const feRev = i.feComm * i.feAdvance + i.feComm * (1 - i.feAdvance) * (1 - i.feLapse);
+  const mdRev = i.mdComm;
+
+  const line = (
+    target: number, rev: number, chargeback: number, payout: number, callCost: number,
+    conv: number, place: number, callsPerAgent: number,
+  ): LineRecipe => {
+    const hit = conv * place;
+    const callsPer = hit > 0 ? 1 / hit : Infinity;
+    const retention = rev * i.retention;
+    const per = { revenue: rev, payout, calls: callCost * callsPer, chargeback, retention, net: rev - payout - callCost * callsPer - chargeback - retention };
+    // A money-losing policy can't be scaled to a profit: no volume.
+    const n = target > 0 && per.net > 0 && Number.isFinite(target) ? target / per.net : 0;
+    const policiesDay = n / D;
+    const callsDay = n > 0 ? policiesDay * callsPer : 0;
+    return {
+      perPolicy: per, target, policiesMo: n, policiesDay,
+      appsDay: n > 0 ? policiesDay / place : 0,
+      callsDay,
+      agents: callsDay > 0 ? Math.ceil(callsDay / callsPerAgent - 1e-9) : 0,
+      revenue: n * rev, payouts: n * payout, callCost: n * per.calls, chargebacks: n * chargeback, retention: n * retention,
+    };
+  };
+
+  const fe = line(companyNet * feMix, feRev, i.feComm * i.feAdvance * i.feLapse, i.fePayout, i.feCallCost, i.feConv, i.fePlace, i.feCallsPerAgent);
+  // Medicare only sells 5 months a year, so each selling month carries 12/5 of its monthly share.
+  const md = line((companyNet * (1 - feMix) * 12) / MD_SELLING_MONTHS, mdRev, i.mdComm * i.mdLapse, i.mdPayout, i.mdCallCost, i.mdConv, i.mdPlace, i.mdCallsPerAgent);
+  const feasible = Number.isFinite(companyNet) && [fe, md].every((l) => l.target === 0 || (l.perPolicy.net > 0 && Number.isFinite(l.perPolicy.net)));
+
+  const tail = i.feComm * (1 - i.feAdvance) * (1 - i.feLapse);
+  const feRenewPerPolicyYr = feRev * (1 - i.feLapse) * i.feRenew;
+  const mdResidPerPolicyYr = mdRev * (1 - i.mdLapse);
+  const upsideCompany = (fe.policiesMo * 12 * feRenewPerPolicyYr + md.policiesMo * MD_SELLING_MONTHS * mdResidPerPolicyYr) * (1 - i.retention) / 12;
+
+  let feMonthReached: number | null = null;
+  for (let m = 1; m <= 36 && feMonthReached === null; m++)
+    if (i.feCallsStart + i.feCallsQtrInc * Math.floor((m - 1) / 3) >= fe.callsDay - 1e-9) feMonthReached = m;
+
+  return {
+    feasible,
+    companyNet,
+    fe,
+    md,
+    youEarly: goal - fe.policiesMo * tail * (1 - i.retention) * keepShare,
+    upside: upsideCompany * keepShare,
+    feMonthReached,
+  };
+}

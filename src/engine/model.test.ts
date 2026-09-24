@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULTS, runModel, type Outputs } from './model';
+import { DEFAULTS, recipe, runModel, type Outputs } from './model';
 
 const out = runModel(DEFAULTS);
 const near = (actual: number, expected: number) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(0.01);
@@ -129,5 +129,30 @@ describe('Chains (agents → net) reconcile with the summary', () => {
   it('monthly cash in = advances + months 10–12 payments', () => {
     near(out.fe[35].cashIn, 951841.8 + 166572.31);
     near(out.fe[35].cashNet, 951841.8 + 166572.31 - 656026.14);
+  });
+});
+
+describe('recipe (reverse model)', () => {
+  it('works back from $25K/mo to a partner at 25%, all Final Expense', () => {
+    const r = recipe(DEFAULTS, 25000, 0.25, 1);
+    near(r.companyNet, 100000);
+    // 585 advance + 136.5 tail − 120 payout − 107.69 calls − 175.5 chargeback − 14.43 retention
+    near(r.fe.perPolicy.net, 303.8808);
+    near(r.fe.policiesMo, 100000 / 303.8808);
+    near(r.fe.callsDay, r.fe.policiesDay / 0.065);
+    expect(r.fe.agents).toBe(Math.ceil(r.fe.callsDay / 20));
+    expect(r.md.agents).toBe(0);
+    expect(r.feasible).toBe(true);
+    // the recipe's own numbers reconcile to the target
+    near(r.fe.revenue - r.fe.payouts - r.fe.callCost - r.fe.chargebacks - r.fe.retention, 100000);
+  });
+  it('Medicare share is packed into 5 selling months', () => {
+    const r = recipe(DEFAULTS, 25000, 0.25, 0.5);
+    near(r.md.target, (50000 * 12) / 5);
+    near(r.md.perPolicy.net, 400 - 120 - 10 / 0.065 - 80 - 8);
+  });
+  it('flags money-losing assumptions as infeasible', () => {
+    expect(recipe({ ...DEFAULTS, feCallCost: 50 }, 25000, 0.25, 1).feasible).toBe(false);
+    expect(recipe(DEFAULTS, 25000, 0, 1).feasible).toBe(false);
   });
 });

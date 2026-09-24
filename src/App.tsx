@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DEFAULTS, MD_MONTHS, runModel, type Chain, type InputKey, type Inputs, type Outputs } from './engine/model';
 import { CashFlowChart, MedicareChart, OverviewChart, TeamChart, C } from './Charts';
+import { Card, useCountUp } from './ui';
+import { Goal, GOAL_DEFAULT, type GoalState } from './Goal';
 import { compact, count, FE_ROWS, fmt, int, MD_ROWS, money, num1, pct, SUMMARY_ROWS } from './format';
 
 // ---------- controls ----------
@@ -51,22 +53,40 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 // ---------- persistence: URL params → localStorage → defaults ----------
 const LS_KEY = 'insurance-outlook-v1';
-type State = { inputs: Inputs; names: string[] };
+type Page = 'Planner' | 'Income goal';
+type State = { inputs: Inputs; names: string[]; goal: GoalState; page: Page };
+
+// Goal fields arrive from URLs/storage as strings or junk; keep only sane values.
+function readGoal(src: Record<string, unknown> | undefined): GoalState {
+  const g = { ...GOAL_DEFAULT };
+  const n = (v: unknown) => (v == null || v === '' ? NaN : Number(v));
+  const a = n(src?.amount), p = n(src?.partner), m = n(src?.feMix);
+  if (a >= 0 && a <= 1e8) g.amount = a;
+  if ([0, 1, 2, 3].includes(p)) g.partner = p;
+  if (m >= 0 && m <= 1) g.feMix = m;
+  return g;
+}
 
 function loadState(): State {
   const inputs = { ...DEFAULTS };
   const names = [...DEFAULT_NAMES];
+  let goal = GOAL_DEFAULT;
+  let page: Page = 'Planner';
   const q = new URLSearchParams(location.search);
   let src: Record<string, unknown> | null = null;
   if ([...q.keys()].length) {
     src = Object.fromEntries(q);
     DEFAULT_NAMES.forEach((_, i) => q.has(`n${i + 1}`) && (names[i] = q.get(`n${i + 1}`)!));
+    goal = readGoal({ amount: q.get('goal'), partner: q.get('goalPartner'), feMix: q.get('goalMix') });
+    if (q.get('page') === 'goal') page = 'Income goal';
   } else {
     try {
       const s = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null');
       if (s) {
         src = s.inputs;
         if (Array.isArray(s.names) && s.names.length === 4) s.names.forEach((n: unknown, i: number) => typeof n === 'string' && (names[i] = n));
+        goal = readGoal(s.goal);
+        if (s.page === 'Income goal') page = 'Income goal';
       }
     } catch { /* ignore corrupt storage */ }
   }
@@ -74,13 +94,17 @@ function loadState(): State {
     const n = Number(src[k]);
     if (src[k] != null && Number.isFinite(n)) inputs[k] = n;
   }
-  return { inputs, names };
+  return { inputs, names, goal, page };
 }
 
-function shareQuery({ inputs, names }: State) {
+function shareQuery({ inputs, names, goal, page }: State) {
   const q = new URLSearchParams();
   for (const k of ALL_KEYS) if (inputs[k] !== DEFAULTS[k]) q.set(k, String(inputs[k]));
   names.forEach((n, i) => n !== DEFAULT_NAMES[i] && q.set(`n${i + 1}`, n));
+  if (goal.amount !== GOAL_DEFAULT.amount) q.set('goal', String(goal.amount));
+  if (goal.partner !== GOAL_DEFAULT.partner) q.set('goalPartner', String(goal.partner));
+  if (goal.feMix !== GOAL_DEFAULT.feMix) q.set('goalMix', String(goal.feMix));
+  if (page === 'Income goal') q.set('page', 'goal');
   return q.toString();
 }
 
@@ -101,26 +125,6 @@ function exportCsv(out: Outputs) {
 }
 
 // ---------- small components ----------
-function useCountUp(target: number, ms = 250) {
-  const [v, setV] = useState(target);
-  const from = useRef(target);
-  useEffect(() => {
-    const start = performance.now();
-    const a = from.current;
-    let raf = 0;
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / ms);
-      const cur = a + (target - a) * (1 - (1 - p) ** 3);
-      from.current = cur;
-      setV(cur);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return v;
-}
-
 function Control({ ctl, value, onChange, accent, dense }: { ctl: Ctl; value: number; onChange: (v: number) => void; accent: string; dense?: boolean }) {
   const [key, label, min, max, step, unit] = ctl;
   const shown = toDisplay(unit, value);
@@ -169,10 +173,6 @@ function Tabs<T extends string>({ value, options, onChange }: { value: T; option
     </div>
   );
 }
-
-const Card = ({ className = '', children }: { className?: string; children: ReactNode }) => (
-  <div className={`rounded-xl bg-surface ring-1 ring-line/70 ${className}`}>{children}</div>
-);
 
 const Btn = ({ onClick, children, primary }: { onClick: () => void; children: ReactNode; primary?: boolean }) => (
   <button onClick={onClick}
@@ -288,7 +288,7 @@ const PERIODS = ['Year 1', 'Year 2', 'Year 3', 'All 3 years'];
 
 export default function App() {
   const [state, setState] = useState<State>(loadState);
-  const { inputs, names } = state;
+  const { inputs, names, goal, page } = state;
   const out = useMemo(() => runModel(inputs), [inputs]);
   const [tab, setTab] = useState<Tab>('Final Expense');
   const [advanced, setAdvanced] = useState(false);
@@ -317,6 +317,8 @@ export default function App() {
   }, [state]);
 
   const setInput = (k: InputKey, v: number) => setState((s) => ({ ...s, inputs: { ...s.inputs, [k]: v } }));
+  const setGoal = (goal: GoalState) => setState((s) => ({ ...s, goal }));
+  const setPage = (page: Page) => setState((s) => ({ ...s, page }));
   const setName = (i: number, n: string) => setState((s) => ({ ...s, names: s.names.map((x, j) => (j === i ? n : x)) }));
   const splitsOk = Math.abs(out.splitTotal - 1) < 1e-6;
   const ctl = (c: Ctl, accent: string, dense = false) => (
@@ -333,9 +335,17 @@ export default function App() {
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line/70 px-6">
           <h1 className="text-[16px] font-semibold tracking-tight">Insurance Outlook</h1>
           <span className="text-[13px] text-muted">Final Expense + Medicare · 3-year plan</span>
+          <div className="ml-6 flex rounded-lg bg-surface p-0.5 ring-1 ring-line">
+            {(['Planner', 'Income goal'] as const).map((v) => (
+              <button key={v} onClick={() => setPage(v)}
+                className={`rounded-md px-3 py-1 text-[13px] font-medium transition-colors ${page === v ? (v === 'Income goal' ? 'goal-tab text-white' : 'bg-surface2 text-ink') : 'text-muted hover:text-ink'}`}>
+                {v === 'Income goal' ? '✦ Income goal' : v}
+              </button>
+            ))}
+          </div>
           <div className="ml-auto flex items-center gap-1">
             <Btn onClick={() => setModal('notes')}>Model notes</Btn>
-            <Btn onClick={() => setState({ inputs: { ...DEFAULTS }, names: [...DEFAULT_NAMES] })}>Reset</Btn>
+            <Btn onClick={() => setState((s) => ({ ...s, inputs: { ...DEFAULTS }, names: [...DEFAULT_NAMES], goal: GOAL_DEFAULT }))}>Reset</Btn>
             <Btn onClick={() => navigator.clipboard.writeText(location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
               {copied ? 'Link copied ✓' : 'Copy share link'}
             </Btn>
@@ -343,6 +353,7 @@ export default function App() {
           </div>
         </header>
 
+        {page === 'Income goal' ? <Goal inputs={inputs} names={names} goal={goal} setGoal={setGoal} /> : (
         <div className="flex min-h-0 flex-1 gap-4 p-4">
           {/* assumptions */}
           <Card className="flex w-[310px] shrink-0 flex-col overflow-hidden">
@@ -495,6 +506,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        )}
 
         {modal === 'notes' && (
           <Modal title="Model notes" onClose={() => setModal(null)} width={960}>

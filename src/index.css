@@ -31,3 +31,15 @@ input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; backgro
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
 .recharts-wrapper *:focus { outline: none; }
+
+/* Income goal view */
+.goal-grad { background: linear-gradient(90deg, #34d399, #60a5fa 60%, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; caret-color: #34d399; }
+.goal-input:focus-within { box-shadow: 0 0 0 1px #34d39988, 0 0 40px -8px #34d39966; }
+.goal-tab { background: linear-gradient(90deg, #199e70, #3987e5); box-shadow: 0 0 16px -4px #199e70aa; }
+.goal-dot { animation: goal-pop .35s ease-out both; }
+@keyframes goal-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.goal-me { background-image: linear-gradient(110deg, transparent 30%, #ffffff40 50%, transparent 70%) !important; background-size: 200% 100%; animation: goal-shine 2.8s linear infinite; }
+@keyframes goal-shine { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.goal-steps { counter-reset: s; }
+.goal-steps li { counter-increment: s; position: relative; padding-left: 34px; }
+.goal-steps li::before { content: counter(s); position: absolute; left: 0; top: -1px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #199e70, #3987e5); }
