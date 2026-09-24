@@ -43,6 +43,9 @@ input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 .goal-steps { counter-reset: s; }
 .goal-steps li { counter-increment: s; position: relative; padding-left: 34px; }
 .goal-steps li::before { content: counter(s); position: absolute; left: 0; top: -1px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #199e70, #3987e5); }
+/* Exit value view */
+.exit-grad { background: linear-gradient(90deg, #f5c451, #199e70); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.exit-tab { background: linear-gradient(90deg, #f5c451, #199e70); box-shadow: 0 0 16px -4px #f5c451aa; }
 .scroll-y { scrollbar-width: thin; scrollbar-color: #34343a transparent; }
 .scroll-y::-webkit-scrollbar { display: block; width: 6px; }
 .scroll-y::-webkit-scrollbar-thumb { background: #34343a; border-radius: 3px; }

@@ -32,6 +32,12 @@ export const DEFAULTS = {
   split2: 0.25,
   split3: 0.25,
   split4: 0.25,
+  // Exit valuation
+  exitMdBookMult: 2.0, // Medicare renewal book multiple (× next-12-month renewals)
+  exitFeBookMult: 1.5, // FE renewal book multiple
+  exitOverhead: 0.08, // overhead + management a buyer deducts that the plan does not carry (% of revenue)
+  exitClosePct: 0.6, // share of price paid in cash at close; rest is earnout over 24 months tied to retention
+  exitSaleTax: 0, // tax on sale proceeds; 0 = pre-tax
 };
 
 export type Inputs = typeof DEFAULTS;

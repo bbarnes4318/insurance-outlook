@@ -23,3 +23,9 @@ export function useCountUp(target: number, ms = 250) {
 export const Card = ({ className = '', children }: { className?: string; children: ReactNode }) => (
   <div className={`rounded-xl bg-surface ring-1 ring-line/70 ${className}`}>{children}</div>
 );
+
+// Animated number. `f` formats the in-flight value so it rolls like an odometer.
+export function Num({ v, f, className = '', color }: { v: number; f: (n: number) => string; className?: string; color?: string }) {
+  const n = useCountUp(Number.isFinite(v) ? v : 0, 450);
+  return <span className={`tnum ${className}`} style={{ color }}>{f(n)}</span>;
+}

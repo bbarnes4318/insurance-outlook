@@ -3,6 +3,7 @@ import {
 } from 'recharts';
 import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import type { Outputs } from './engine/model';
+import type { YearExit } from './engine/valuation';
 import { compact, fmt, FE_ROWS, MD_ROWS, type Kind } from './format';
 
 // Validated (dataviz validator, dark, surface #161618): fe / md / net pass CVD + contrast. Costs are neutral on purpose.
@@ -162,5 +163,50 @@ export function MedicareChart({ out }: { out: Outputs }) {
         </Bar>
       </ComposedChart>
     )}</Fit>
+  );
+}
+
+export const GOLD = '#f5c451';
+
+// Total wealth if you sell at each year-end: profit already taken + sale price + FE money still owed.
+export function SellOrHoldChart({ ex }: { ex: YearExit[] }) {
+  const data = ex.map((e, k) => ({ ...e, name: `Year ${e.y}`, sale: e.price.base, gain: k < 2 ? ex[k + 1].walkAway - e.walkAway : null }));
+  const margin = { top: 28, right: 8, left: 0, bottom: 0 };
+  return (
+    <Fit>{(w, h) => {
+      const band = (w - margin.left - margin.right - 60) / data.length;
+      return (
+        <ComposedChart width={w} height={h} data={data} margin={margin} barCategoryGap="38%">
+          <CartesianGrid stroke={C.grid} vertical={false} />
+          <XAxis dataKey="name" {...axis} fontSize={13} tick={{ fill: C.ink }} dy={6} />
+          <YAxis tickFormatter={compact} width={60} {...axis} />
+          <Tooltip cursor={{ fill: '#ffffff06' }} content={({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0].payload as (typeof data)[number];
+            return <Tip title={`Sell at the end of ${d.name}`} rows={[
+              ['Profit already taken', '$', d.cumProfit, C.fe], ['Sale price', '$', d.sale, GOLD],
+              ['FE commissions still owed', '$', d.receivable, C.feLight], ['Total if sold here', '$', d.walkAway],
+            ]} />;
+          }} />
+          <Legend {...legend} />
+          <Bar dataKey="cumProfit" name="Profit already taken" stackId="w" fill={C.fe} {...bar} />
+          <Bar dataKey="sale" name="Sale price" stackId="w" fill={GOLD} {...bar} />
+          <Bar dataKey="receivable" name="FE commissions still owed" stackId="w" fill={C.feLight} {...bar} radius={[4, 4, 0, 0]}>
+            <LabelList dataKey="walkAway" {...topLabel} />
+            <LabelList dataKey="gain" content={(p) => {
+              const g = data[p.index ?? 0]?.gain;
+              if (g == null) return null;
+              const x = Number(p.x) + Number(p.width) / 2 + band / 2;
+              return (
+                <text x={x} y={Number(p.y) - 8} textAnchor="middle" fontSize={12}>
+                  <tspan x={x} fill={g < 0 ? C.neg : C.net} fontWeight={600}>{g < 0 ? '' : '+'}{compact(g)}</tspan>
+                  <tspan x={x} dy={15} fill={C.muted} fontSize={11}>one more year</tspan>
+                </text>
+              );
+            }} />
+          </Bar>
+        </ComposedChart>
+      );
+    }}</Fit>
   );
 }

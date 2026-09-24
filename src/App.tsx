@@ -3,10 +3,12 @@ import { DEFAULTS, MD_MONTHS, runModel, type Chain, type InputKey, type Inputs, 
 import { CashFlowChart, MedicareChart, OverviewChart, TeamChart, C } from './Charts';
 import { Card, useCountUp } from './ui';
 import { Goal, GOAL_DEFAULT, type GoalState } from './Goal';
+import { Exit } from './Exit';
+import { exitValue, type YearExit } from './engine/valuation';
 import { compact, count, FE_ROWS, fmt, int, MD_ROWS, money, num1, pct, SUMMARY_ROWS } from './format';
 
 // ---------- controls ----------
-type Unit = '$' | '%' | 'calls' | 'agents' | 'days';
+type Unit = '$' | '%' | 'calls' | 'agents' | 'days' | 'x';
 type Ctl = [InputKey, string, number, number, number, Unit]; // key, label, min, max, step (display units), unit
 
 type Line = 'Final Expense' | 'Medicare' | 'Company';
@@ -54,6 +56,13 @@ const LINES: { name: Line; color: string; groups: [string, Ctl[]][] }[] = [
       ['retention', 'Retention cost (% of revenue)', 0, 10, 0.1, '%'],
       ['holdback', 'Tax / reserve holdback', 0, 60, 1, '%'],
     ]],
+    ['Exit valuation', [
+      ['exitMdBookMult', 'Medicare book multiple', 0.5, 4, 0.1, 'x'],
+      ['exitFeBookMult', 'FE book multiple', 0.5, 4, 0.1, 'x'],
+      ['exitOverhead', 'Overhead buyers deduct', 0, 30, 0.5, '%'],
+      ['exitClosePct', 'Cash at close', 0, 100, 5, '%'],
+      ['exitSaleTax', 'Tax on sale', 0, 50, 1, '%'],
+    ]],
   ] },
 ];
 const SPLIT_KEYS: InputKey[] = ['split1', 'split2', 'split3', 'split4'];
@@ -66,7 +75,8 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 // ---------- persistence: URL params → localStorage → defaults ----------
 const LS_KEY = 'insurance-outlook-v1';
-type Page = 'Planner' | 'Income goal';
+type Page = 'Planner' | 'Income goal' | 'Exit value';
+const PAGE_PARAM: Partial<Record<Page, string>> = { 'Income goal': 'goal', 'Exit value': 'exit' };
 type State = { inputs: Inputs; names: string[]; goal: GoalState; page: Page };
 
 // Goal fields arrive from URLs/storage as strings or junk; keep only sane values.
@@ -91,7 +101,7 @@ function loadState(): State {
     src = Object.fromEntries(q);
     DEFAULT_NAMES.forEach((_, i) => q.has(`n${i + 1}`) && (names[i] = q.get(`n${i + 1}`)!));
     goal = readGoal({ amount: q.get('goal'), partner: q.get('goalPartner'), feMix: q.get('goalMix') });
-    if (q.get('page') === 'goal') page = 'Income goal';
+    page = (Object.keys(PAGE_PARAM) as Page[]).find((p) => PAGE_PARAM[p] === q.get('page')) ?? 'Planner';
   } else {
     try {
       const s = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null');
@@ -99,7 +109,7 @@ function loadState(): State {
         src = s.inputs;
         if (Array.isArray(s.names) && s.names.length === 4) s.names.forEach((n: unknown, i: number) => typeof n === 'string' && (names[i] = n));
         goal = readGoal(s.goal);
-        if (s.page === 'Income goal') page = 'Income goal';
+        if (s.page === 'Income goal' || s.page === 'Exit value') page = s.page;
       }
     } catch { /* ignore corrupt storage */ }
   }
@@ -117,12 +127,12 @@ function shareQuery({ inputs, names, goal, page }: State) {
   if (goal.amount !== GOAL_DEFAULT.amount) q.set('goal', String(goal.amount));
   if (goal.partner !== GOAL_DEFAULT.partner) q.set('goalPartner', String(goal.partner));
   if (goal.feMix !== GOAL_DEFAULT.feMix) q.set('goalMix', String(goal.feMix));
-  if (page === 'Income goal') q.set('page', 'goal');
+  if (PAGE_PARAM[page]) q.set('page', PAGE_PARAM[page]!);
   return q.toString();
 }
 
 // ---------- CSV ----------
-function exportCsv(out: Outputs) {
+function exportCsv(out: Outputs, ex: YearExit[]) {
   const esc = (s: string | number) => (typeof s === 'number' ? String(Math.round(s * 100) / 100) : `"${s.replace(/"/g, '""')}"`);
   const lines: (string | number)[][] = [];
   lines.push(['Final Expense monthly'], ['Row', ...out.fe.map((r) => `Month ${r.month}`)]);
@@ -131,6 +141,14 @@ function exportCsv(out: Outputs) {
   MD_ROWS.forEach(([k, l]) => lines.push([l, ...out.md.flatMap((r) => MD_MONTHS.map(() => r[k]))]));
   lines.push([], ['3-Year Summary'], ['Row', 'Year 1', 'Year 2', 'Year 3']);
   SUMMARY_ROWS.forEach(([k, l]) => lines.push([l, ...out.years.map((y) => y[k])]));
+  lines.push([], ['Exit value'], ['Row', 'Year 1', 'Year 2', 'Year 3']);
+  ([
+    ['Medicare renewals next 12 mo', (e) => e.mdFwd], ['FE renewals next 12 mo', (e) => e.feFwd], ['FE owed to seller', (e) => e.receivable],
+    ['Adjusted EBITDA', (e) => e.adjEbitda], ['Earnings multiple', (e) => e.tier.base], ['Book value', (e) => e.book.base],
+    ['Earnings value', (e) => e.earnings.base], ['Priced on', (e) => (e.lens === 'earnings' ? 'Earnings' : 'Book')],
+    ['Low', (e) => e.price.low], ['Base', (e) => e.price.base], ['High', (e) => e.price.high], ['Cash at close', (e) => e.atClose],
+    ['Earnout', (e) => e.earnout], ['Profit taken to date', (e) => e.cumProfit], ['Total if sold here', (e) => e.walkAway],
+  ] as [string, (e: YearExit) => string | number][]).forEach(([l, f]) => lines.push([l, ...ex.map(f)]));
   const blob = new Blob([lines.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'insurance-outlook.csv' });
   a.click();
@@ -194,17 +212,26 @@ const Btn = ({ onClick, children, primary }: { onClick: () => void; children: Re
   </button>
 );
 
-function PeriodCard({ label, net, rev, active, onClick }: { label: string; net: number; rev: number; active: boolean; onClick: () => void }) {
+function PeriodCard({ label, net, rev, active, onClick, pill, onPill }: {
+  label: string; net: number; rev: number; active: boolean; onClick: () => void; pill: string; onPill: () => void;
+}) {
   const n = useCountUp(net);
   return (
     <button onClick={onClick} aria-pressed={active}
       className={`flex min-w-0 flex-1 flex-col justify-center rounded-xl px-5 text-left ring-1 transition-colors ${active ? 'bg-surface2 ring-2 ring-ink/70' : 'bg-surface ring-line/70 hover:bg-surface2/60'}`}>
       <div className="flex items-center justify-between text-[13px]">
-        <span className={active ? 'font-semibold text-ink' : 'text-muted'}>{label}</span>
-        {active && <span className="rounded bg-ink px-1.5 text-[10px] font-semibold uppercase leading-4 text-canvas">Showing</span>}
+        <span className={`truncate ${active ? 'font-semibold text-ink' : 'text-muted'}`}>{label}</span>
+        {/* a span, not a button: buttons can't nest */}
+        <span role="button" tabIndex={0} title="Open Exit value" style={{ color: C.net }}
+          onClick={(e) => { e.stopPropagation(); onPill(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onPill(); } }}
+          className="ml-2 shrink-0 rounded-full bg-net/10 px-2 text-[11px] font-semibold leading-[18px] ring-1 ring-net/30 hover:bg-net/20">{pill}</span>
       </div>
       <div title={money(net)} className={`tnum text-[26px] font-semibold leading-9 ${n < 0 ? 'text-cost' : 'text-ink'}`}>{compact(n)}</div>
-      <div className="text-[12px] text-muted">net profit on <span className="text-sub" title={money(rev)}>{compact(rev)}</span></div>
+      <div className="flex items-center justify-between text-[12px] text-muted">
+        <span>net profit on <span className="text-sub" title={money(rev)}>{compact(rev)}</span></span>
+        {active && <span className="rounded bg-ink px-1.5 text-[10px] font-semibold uppercase leading-4 text-canvas">Showing</span>}
+      </div>
     </button>
   );
 }
@@ -296,6 +323,8 @@ export default function App() {
   const [state, setState] = useState<State>(loadState);
   const { inputs, names, goal, page } = state;
   const out = useMemo(() => runModel(inputs), [inputs]);
+  const ex = useMemo(() => exitValue(inputs, out), [inputs, out]);
+  const [exitYear, setExitYear] = useState<1 | 2 | 3>(3);
   const [tab, setTab] = useState<Line>('Final Expense');
   const [period, setPeriod] = useState(3);
   const [view, setView] = useState<View>('Cash flow');
@@ -324,6 +353,8 @@ export default function App() {
   const setInput = (k: InputKey, v: number) => setState((s) => ({ ...s, inputs: { ...s.inputs, [k]: v } }));
   const setGoal = (goal: GoalState) => setState((s) => ({ ...s, goal }));
   const setPage = (page: Page) => setState((s) => ({ ...s, page }));
+  const openExit = (y: 1 | 2 | 3) => { setExitYear(y); setPage('Exit value'); };
+  const bestExit = ex.reduce((a, b) => (b.walkAway > a.walkAway ? b : a)).y as 1 | 2 | 3;
   const setName = (i: number, n: string) => setState((s) => ({ ...s, names: s.names.map((x, j) => (j === i ? n : x)) }));
   const splitsOk = Math.abs(out.splitTotal - 1) < 1e-6;
   const line = LINES.find((l) => l.name === tab)!;
@@ -339,10 +370,10 @@ export default function App() {
           <h1 className="text-[16px] font-semibold tracking-tight">Insurance Outlook</h1>
           <span className="text-[13px] text-muted">Final Expense + Medicare · 3-year plan</span>
           <div className="ml-6 flex rounded-lg bg-surface p-0.5 ring-1 ring-line">
-            {(['Planner', 'Income goal'] as const).map((v) => (
+            {(['Planner', 'Income goal', 'Exit value'] as const).map((v) => (
               <button key={v} onClick={() => setPage(v)}
-                className={`rounded-md px-3 py-1 text-[13px] font-medium transition-colors ${page === v ? (v === 'Income goal' ? 'goal-tab text-white' : 'bg-surface2 text-ink') : 'text-muted hover:text-ink'}`}>
-                {v === 'Income goal' ? '✦ Income goal' : v}
+                className={`rounded-md px-3 py-1 text-[13px] font-medium transition-colors ${page === v ? (v === 'Income goal' ? 'goal-tab text-white' : v === 'Exit value' ? 'exit-tab text-canvas' : 'bg-surface2 text-ink') : 'text-muted hover:text-ink'}`}>
+                {v === 'Income goal' ? '✦ Income goal' : v === 'Exit value' ? '◆ Exit value' : v}
               </button>
             ))}
           </div>
@@ -352,11 +383,12 @@ export default function App() {
             <Btn onClick={() => navigator.clipboard.writeText(location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
               {copied ? 'Link copied ✓' : 'Copy share link'}
             </Btn>
-            <Btn primary onClick={() => exportCsv(out)}>Export CSV</Btn>
+            <Btn primary onClick={() => exportCsv(out, ex)}>Export CSV</Btn>
           </div>
         </header>
 
-        {page === 'Income goal' ? <Goal inputs={inputs} names={names} goal={goal} setGoal={setGoal} /> : (
+        {page === 'Income goal' ? <Goal inputs={inputs} names={names} goal={goal} setGoal={setGoal} />
+        : page === 'Exit value' ? <Exit inputs={inputs} out={out} ex={ex} names={names} year={exitYear} setYear={setExitYear} /> : (
         <div className="flex min-h-0 flex-1 gap-4 p-4">
           {/* assumptions */}
           <Card className="flex w-[320px] shrink-0 flex-col overflow-hidden">
@@ -388,6 +420,7 @@ export default function App() {
             <div className="flex h-[92px] shrink-0 gap-3">
               {PERIODS.map((label, i) => (
                 <PeriodCard key={label} label={label} active={period === i} onClick={() => setPeriod(i)}
+                  pill={i < 3 ? `Exit ${compact(ex[i].price.base)}` : `Best exit: Year ${bestExit}`} onPill={() => openExit(i < 3 ? (i + 1) as 1 | 2 | 3 : bestExit)}
                   net={i < 3 ? out.years[i].totalNet : out.cumulative.totalNet} rev={i < 3 ? out.years[i].totalRev : out.cumulative.totalRev} />
               ))}
             </div>
@@ -507,8 +540,8 @@ export default function App() {
         )}
 
         {modal === 'notes' && (
-          <Modal title="Model notes" onClose={() => setModal(null)} width={960}>
-            <div className="grid grid-cols-[1.4fr_1fr] gap-8 text-[13px] leading-relaxed">
+          <Modal title="Model notes" onClose={() => setModal(null)} width={1280}>
+            <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-8 text-[13px] leading-relaxed">
               <div>
                 <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Math corrections vs the original spreadsheet</h3>
                 <ol className="list-decimal space-y-2 pl-4 text-sub">
@@ -527,6 +560,16 @@ export default function App() {
                   <li>Retention cost is a percentage of revenue.</li>
                   <li>Partner figures are before tax unless a holdback is set.</li>
                   <li>Any retention factor is (1 − that line's lapse rate).</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Exit valuation</h3>
+                <ul className="list-disc space-y-2 pl-4 text-sub">
+                  <li><b className="text-ink">Book lens:</b> next-12-month Medicare renewals × Medicare book multiple (default 2.0x, range 1.5–2.5x) plus next-12-month FE renewals × FE book multiple (default 1.5x). Small insurance agencies trade around 1.8–2.3x revenue.</li>
+                  <li><b className="text-ink">Earnings lens:</b> trailing-year net profit minus overhead buyers deduct, times a size-based multiple: under $1M 3–5x, $1–3M 4–7x, $3–10M 5–8x, $10M+ 6–10x. Priced below P&amp;C platforms (about 11.8x at $1M+ EBITDA) because FE/Medicare revenue depends on continued lead spend and commission rules.</li>
+                  <li>The price is the higher of the two lenses at base. They are never added together.</li>
+                  <li>FE months 10–12 money already earned stays with the seller and is shown separately.</li>
+                  <li>Cash at close vs earnout is set in assumptions; default 60/40 over 24 months.</li>
                 </ul>
               </div>
             </div>

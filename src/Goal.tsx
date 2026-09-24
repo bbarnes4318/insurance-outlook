@@ -2,19 +2,13 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MD_MONTHS, recipe, type Inputs, type LineRecipe } from './engine/model';
 import { C } from './Charts';
 import { compact, int, money, num1, pct } from './format';
-import { Card, useCountUp } from './ui';
+import { Card, Num } from './ui';
 
 export type GoalState = { amount: number; partner: number; feMix: number };
 export const GOAL_DEFAULT: GoalState = { amount: 25000, partner: 0, feMix: 0.8 };
 
 const PRESETS = [10000, 25000, 50000, 100000, 250000];
 const SPLITS = ['split1', 'split2', 'split3', 'split4'] as const;
-
-// Animated number. `f` formats the in-flight value so it rolls like an odometer.
-function Num({ v, f, className = '', color }: { v: number; f: (n: number) => string; className?: string; color?: string }) {
-  const n = useCountUp(Number.isFinite(v) ? v : 0, 450);
-  return <span className={`tnum ${className}`} style={{ color }}>{f(n)}</span>;
-}
 
 const B = ({ children }: { children: ReactNode }) => <b className="font-semibold text-ink">{children}</b>;
 
