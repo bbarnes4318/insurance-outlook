@@ -1,0 +1,375 @@
+<!doctype html>
+<!--
+  Agency 3-Year Plan write-up. Figures are the tool's defaults (src/engine); update them here when the model changes.
+  Print to PDF (letter, no browser header/footer). Chrome needs a full file:/// URL, not a relative path:
+    "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --no-pdf-header-footer --print-to-pdf=C:\Users\jimbo\Downloads\agency-3-year-plan.pdf file:///C:/Users/jimbo/insurance-outlook/docs/agency-3-year-plan.html
+  Or open in a browser, Print, Save as PDF, and turn off Headers and footers.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agency 3-Year Plan &amp; Exit Value</title>
+<style>
+  @page { size: letter; margin: 0.7in 0.75in 0.75in; }
+  :root { --navy: #103a5c; --navy2: #1f5f8b; --ink: #1d2733; --sub: #4a5563; --muted: #7a8594; --line: #d5dce4; --soft: #f3f6f9;
+          --fe: #3987e5; --feL: #86b6ef; --md: #d95926; --net: #16875f; --gold: #e0a82e; --goldL: #fbf1d9; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 10.5pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 25pt; line-height: 1.15; color: var(--navy); margin: 0; letter-spacing: -0.01em; }
+  .subtitle { font-size: 13pt; color: var(--navy2); margin: 4pt 0 2pt; }
+  .date { color: var(--muted); font-size: 9.5pt; }
+  h2 { font-size: 15pt; color: var(--navy); border-bottom: 2px solid var(--navy); padding-bottom: 4pt; margin: 20pt 0 8pt; break-after: avoid; }
+  h2 .num { color: var(--muted); font-weight: 400; margin-right: 6pt; }
+  h3 { font-size: 11.5pt; color: var(--navy2); margin: 14pt 0 5pt; break-after: avoid; }
+  p { margin: 0 0 7pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  b { color: #0f1720; }
+  .new-page { break-before: page; }
+  .lede { font-size: 11pt; color: var(--sub); }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin: 16pt 0 6pt; }
+  .kpi { border: 1px solid var(--line); border-top: 3px solid var(--navy); border-radius: 4pt; padding: 7pt 9pt; background: #fff; }
+  .kpi.gold { border-top-color: var(--gold); background: var(--goldL); }
+  .kpi .l { font-size: 8pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .kpi .v { font-size: 17pt; font-weight: 700; color: var(--navy); line-height: 1.2; }
+  .kpi.gold .v { color: #8a5d00; }
+  .keep { break-inside: avoid; }
+  .kpi .s { font-size: 8.5pt; color: var(--sub); }
+
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9.5pt; break-inside: avoid; }
+  thead { display: table-header-group; }
+  th { background: var(--navy); color: #fff; font-weight: 600; text-align: right; padding: 5pt 7pt; }
+  th:first-child { text-align: left; }
+  td { padding: 4.5pt 7pt; border-bottom: 1px solid var(--line); text-align: right; }
+  td:first-child { text-align: left; color: var(--sub); }
+  tr.strong td { background: #e8f2ec; font-weight: 700; color: #0f1720; }
+  tr.gold td { background: var(--goldL); font-weight: 700; color: #0f1720; }
+  tr.sep td { border-top: 1.5px solid #9aa6b3; }
+  td.l { text-align: left; }
+  .note { font-size: 8.5pt; color: var(--muted); margin-top: -4pt; }
+
+  .callout { border-left: 3px solid var(--navy2); background: var(--soft); padding: 7pt 10pt; margin: 8pt 0 10pt; break-inside: avoid; }
+  .callout.gold { border-left-color: var(--gold); background: var(--goldL); }
+  .callout.green { border-left-color: var(--net); background: #e8f2ec; }
+  .callout .t { font-weight: 700; color: var(--navy); margin-bottom: 2pt; }
+  .callout.gold .t { color: #8a5d00; }
+  .callout.green .t { color: var(--net); }
+
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; break-inside: avoid; }
+  .lens { border: 1px solid var(--line); border-radius: 4pt; padding: 8pt 10pt; }
+  .lens h4 { margin: 0 0 3pt; font-size: 10.5pt; color: var(--navy); }
+  .lens p { font-size: 9.5pt; color: var(--sub); margin: 0 0 4pt; }
+  .lens .eq { font-size: 9pt; background: var(--soft); padding: 4pt 6pt; border-radius: 3pt; color: var(--ink); }
+
+  /* sell-or-hold bars */
+  .chart { display: flex; align-items: flex-end; gap: 0; height: 140pt; border-bottom: 1px solid #9aa6b3; margin: 12pt 0 4pt; padding: 0 10pt; break-inside: avoid; }
+  .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .stack { width: 62pt; display: flex; flex-direction: column-reverse; }
+  .stack div { width: 100%; }
+  .top { font-weight: 700; font-size: 10pt; color: var(--navy); margin-bottom: 3pt; }
+  .gap { width: 70pt; align-self: center; text-align: center; font-size: 9pt; color: var(--net); font-weight: 700; }
+  .gap span { display: block; font-weight: 400; color: var(--muted); font-size: 8pt; }
+  .xl { display: flex; padding: 0 10pt; margin-bottom: 6pt; font-size: 9.5pt; font-weight: 600; }
+  .xl div { flex: 1; text-align: center; }
+  .xl .g { flex: 0 0 70pt; }
+  .legend { display: flex; gap: 14pt; justify-content: center; font-size: 8.5pt; color: var(--sub); margin-bottom: 10pt; }
+  .legend i { display: inline-block; width: 8pt; height: 8pt; border-radius: 2pt; margin-right: 4pt; vertical-align: -1pt; }
+
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 20pt; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1pt; width: 13pt; height: 13pt; border-radius: 50%; background: var(--navy); color: #fff; font-size: 7.5pt; font-weight: 700; text-align: center; line-height: 13pt; }
+  .pagecard { break-inside: avoid; }
+  .tag { display: inline-block; font-size: 8pt; font-weight: 700; padding: 0 5pt; border-radius: 3pt; background: var(--goldL); color: #8a5d00; vertical-align: 1pt; margin-left: 4pt; }
+  .fine { font-size: 8.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6pt; margin-top: 14pt; }
+</style>
+</head>
+<body>
+
+<h1>Agency 3-Year Plan</h1>
+<div class="subtitle">Growth, profit, exit value, and how to use the Insurance Outlook tool</div>
+<div class="date">September 24, 2026 · all figures from Insurance Outlook at its default settings</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">3-year revenue</div><div class="v">$38.29M</div><div class="s">$22.46M in Year 3</div></div>
+  <div class="kpi"><div class="l">3-year net profit</div><div class="v">$14.24M</div><div class="s">37.2% margin</div></div>
+  <div class="kpi"><div class="l">Each partner, 3 years</div><div class="v">$3.56M</div><div class="s">25% split, pre-tax</div></div>
+  <div class="kpi gold"><div class="l">Sale price, Year 3</div><div class="v">$47.65M</div><div class="s">range $36.65M – $58.65M</div></div>
+</div>
+
+<h2>Executive summary</h2>
+<p>The agency runs two lines side by side: <b>Final Expense</b>, sold year-round, and <b>Medicare</b>, sold during the 5-month enrollment season. Over three years it grows to <b>$22.5M in annual revenue and $9.1M in annual net profit</b>, for a cumulative <b>$38.3M revenue and $14.2M net profit</b>. If the partners sold at the end of Year 3, a buyer would pay about <b>$47.6M</b>.</p>
+<ul>
+  <li><b>Team:</b> Final Expense grows from 5 to 60 agents. Medicare staffs 25, 50 and 100 agents in Years 1, 2 and 3.</li>
+  <li><b>Profitability:</b> margin climbs from 22% in Year 1 to 41% in Year 3 as held-back commissions, renewals and Medicare residuals stack up.</li>
+  <li><b>Cash:</b> every month is cash-positive from month 1. The lowest month nets about $24.7K.</li>
+  <li><b>Partners:</b> with four equal 25% splits, each partner earns about <b>$3.56M pre-tax</b> in profit over the three years.</li>
+  <li><b>Exit value:</b> the agency is worth about <b>$2.84M</b> at the end of Year 1, <b>$21.36M</b> at the end of Year 2 and <b>$47.65M</b> at the end of Year 3. Selling at the end of Year 3 puts about <b>$63.9M</b> in the partners' hands in total: profit already taken, the sale price, and Final Expense commissions still owed. That's <b>$16.0M per partner</b>.</li>
+  <li><b>Keep building:</b> each extra year adds more than the year before. Waiting from Year 1 to Year 2 adds $23.5M, and from Year 2 to Year 3 adds $36.2M.</li>
+  <li><b>What moves the price most:</b> lapse rates. Cutting Final Expense or Medicare lapse by 5 points adds about $4.0M each to the Year 3 price.</li>
+</ul>
+
+<div style="break-inside: avoid"><h2><span class="num">1</span>The 3-year plan</h2>
+<p>Net profit grows about tenfold from Year 1 to Year 3, driven by steady lead growth in Final Expense and a doubling of the Medicare team each season.</p>
+
+<h3>Results by year</h3>
+<table>
+  <thead><tr><th></th><th>Year 1</th><th>Year 2</th><th>Year 3</th><th>3-year total</th></tr></thead>
+  <tbody>
+    <tr><td>Total revenue</td><td>$4.11M</td><td>$11.72M</td><td>$22.46M</td><td>$38.29M</td></tr>
+    <tr><td>Total costs</td><td>$3.22M</td><td>$7.50M</td><td>$13.33M</td><td>$24.05M</td></tr>
+    <tr class="strong"><td>Net profit</td><td>$0.89M</td><td>$4.22M</td><td>$9.13M</td><td>$14.24M</td></tr>
+    <tr><td>Margin</td><td>21.6%</td><td>36.0%</td><td>40.6%</td><td>37.2%</td></tr>
+    <tr><td>Each partner (25%, pre-tax)</td><td>$222K</td><td>$1.06M</td><td>$2.28M</td><td>$3.56M</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Results by business line</h3>
+<table>
+  <thead><tr><th></th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+  <tbody>
+    <tr><td>Final Expense agents (start → end)</td><td>5 → 20</td><td>25 → 40</td><td>45 → 60</td></tr>
+    <tr><td>Final Expense calls per day (start → end)</td><td>100 → 400</td><td>500 → 800</td><td>900 → 1,200</td></tr>
+    <tr><td>Final Expense policies placed</td><td>4,068</td><td>10,576</td><td>17,084</td></tr>
+    <tr><td>Final Expense revenue</td><td>$2.42M</td><td>$6.97M</td><td>$11.89M</td></tr>
+    <tr class="strong"><td>Final Expense net profit</td><td>$0.73M</td><td>$2.57M</td><td>$4.76M</td></tr>
+    <tr class="sep"><td>Medicare agents (in season)</td><td>25</td><td>50</td><td>100</td></tr>
+    <tr><td>Medicare policies placed</td><td>4,237</td><td>8,474</td><td>16,949</td></tr>
+    <tr><td>Medicare revenue (new + residuals)</td><td>$1.69M</td><td>$4.75M</td><td>$10.58M</td></tr>
+    <tr class="strong"><td>Medicare net profit</td><td>$0.16M</td><td>$1.65M</td><td>$4.37M</td></tr>
+  </tbody>
+</table>
+
+<h3>How the growth works</h3>
+<ul>
+  <li><b>Final Expense leads grow every quarter.</b> The plan starts at 100 calls a day and adds 100 each quarter, reaching 1,200 by month 34. At 20 calls per agent, that is 5 agents on day one and 60 by the end.</li>
+  <li><b>Commissions arrive in two parts.</b> 75% of the $780 first-year commission is advanced when the policy places. The remaining 25% is paid in policy months 10–12 on policies still active. That is why Year 1 margin is lower and later years are richer.</li>
+  <li><b>Renewals and residuals build a book.</b> Final Expense renews at 5% a year on retained policies. Medicare policies that stay on the books (80%) pay a residual the following year, so the Medicare line jumps from a 10% margin in Year 1 to 41% in Year 3.</li>
+  <li><b>Medicare is seasonal.</b> Agents sell 5 months a year: Oct, Nov, Jan, Feb and Mar.</li>
+  <li><b>Beyond Year 3.</b> About $2.0M of Final Expense commissions earned in the plan is still owed after month 36. It belongs to the partners whether they keep the agency or sell it.</li>
+</ul>
+
+<h3>Key default assumptions</h3>
+<table>
+  <thead><tr><th>Assumption</th><th>Final Expense</th><th>Medicare</th></tr></thead>
+  <tbody>
+    <tr><td>Calls per agent per day</td><td>20</td><td>25</td></tr>
+    <tr><td>Cost per call</td><td>$7</td><td>$10</td></tr>
+    <tr><td>Calls that become applications</td><td>10%</td><td>10%</td></tr>
+    <tr><td>Applications that place</td><td>65%</td><td>65%</td></tr>
+    <tr><td>Lapse rate (chargebacks)</td><td>30%</td><td>20%</td></tr>
+    <tr><td>Commission per policy</td><td>$780 first year (75% up front)</td><td>$400</td></tr>
+    <tr><td>Agent payout per policy</td><td>$120</td><td>$120</td></tr>
+    <tr><td>Net profit per policy placed</td><td>$182</td><td>$46</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Company and exit assumptions</th><th>Default</th></tr></thead>
+  <tbody>
+    <tr><td>Working days per month</td><td>20.86</td></tr>
+    <tr><td>Retention cost (% of revenue)</td><td>2%</td></tr>
+    <tr><td>Tax / reserve holdback on partner profit</td><td>0%</td></tr>
+    <tr><td>Partner splits</td><td>4 × 25%</td></tr>
+    <tr class="sep"><td>Medicare book multiple</td><td>2.0x</td></tr>
+    <tr><td>Final Expense book multiple</td><td>1.5x</td></tr>
+    <tr><td>Overhead buyers deduct (% of revenue)</td><td>8%</td></tr>
+    <tr><td>Cash at close</td><td>60% (rest is a 24-month earnout)</td></tr>
+    <tr><td>Tax on sale</td><td>0% (pre-tax)</td></tr>
+  </tbody>
+</table>
+
+<h2 class="new-page"><span class="num">2</span>What the agency would sell for</h2>
+<p>At the end of each year the tool prices the agency the way a buyer would. It looks at the agency two ways and takes the higher one; the two are never added together.</p>
+
+<div class="twocol">
+  <div class="lens">
+    <h4>As a book of renewals</h4>
+    <p>What the policies already in force will pay in the next 12 months, times a book multiple. Used by FMOs and larger agencies buying a book.</p>
+    <div class="eq">Medicare renewals × 2.0 &nbsp;+&nbsp; FE renewals × 1.5</div>
+  </div>
+  <div class="lens">
+    <h4>On earnings</h4>
+    <p>The year's net profit, minus the overhead a buyer adds (8% of revenue), times a multiple that rises with size. Used by PE-backed aggregators and platforms.</p>
+    <div class="eq">under $1M: 4x · $1–3M: 5.5x · $3–10M: 6.5x · $10M+: 8x</div>
+  </div>
+</div>
+
+<h3>Exit value by year-end</h3>
+<table>
+  <thead><tr><th>If you sold at the end of…</th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+  <tbody>
+    <tr><td>Medicare renewals, next 12 months</td><td>$1.36M</td><td>$3.80M</td><td>$8.46M</td></tr>
+    <tr><td>FE renewals, next 12 months</td><td>$85K</td><td>$300K</td><td>$616K</td></tr>
+    <tr><td>Value as a book</td><td>$2.84M</td><td>$8.04M</td><td>$17.85M</td></tr>
+    <tr class="sep"><td>Net profit for the year</td><td>$0.89M</td><td>$4.22M</td><td>$9.13M</td></tr>
+    <tr><td>Minus overhead buyers deduct (8%)</td><td>($0.33M)</td><td>($0.94M)</td><td>($1.80M)</td></tr>
+    <tr><td>Adjusted EBITDA</td><td>$0.56M</td><td>$3.29M</td><td>$7.33M</td></tr>
+    <tr><td>Earnings multiple</td><td>4x</td><td>6.5x</td><td>6.5x</td></tr>
+    <tr><td>Value on earnings</td><td>$2.24M</td><td>$21.36M</td><td>$47.65M</td></tr>
+    <tr class="sep"><td>Priced on</td><td>Book</td><td>Earnings</td><td>Earnings</td></tr>
+    <tr><td>Likely buyer</td><td>FMO or larger agency</td><td>PE-backed aggregator</td><td>PE-backed aggregator</td></tr>
+    <tr><td>Range (low – high)</td><td>$2.13M – $3.55M</td><td>$16.43M – $26.29M</td><td>$36.65M – $58.65M</td></tr>
+    <tr class="gold"><td>Sale price</td><td>$2.84M</td><td>$21.36M</td><td>$47.65M</td></tr>
+  </tbody>
+</table>
+<p class="note">Year 1 earnings are too small for an earnings buyer to beat a book buyer, so the price comes from the renewals. From Year 2 on, profit is big enough that earnings set the price.</p>
+
+<div style="break-inside: avoid"><h3>The deal</h3>
+<p>A buyer typically pays part of the price in cash at close and the rest as an <b>earnout</b> over 24 months, paid only if the book holds up. The plan assumes 60% at close. Final Expense commissions already earned stay with the sellers and are not part of the price.</p>
+<table>
+  <thead><tr><th></th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+  <tbody>
+    <tr><td>Cash at close (60%)</td><td>$1.70M</td><td>$12.81M</td><td>$28.59M</td></tr>
+    <tr><td>Earnout over 24 months (40%)</td><td>$1.14M</td><td>$8.54M</td><td>$19.06M</td></tr>
+    <tr class="strong"><td>Each partner's share of the price (25%)</td><td>$710K</td><td>$5.34M</td><td>$11.91M</td></tr>
+    <tr><td>…of which cash at close</td><td>$426K</td><td>$3.20M</td><td>$7.15M</td></tr>
+    <tr><td>Plus FE commissions still owed to the sellers</td><td>$518K</td><td>$1.26M</td><td>$2.00M</td></tr>
+  </tbody>
+</table></div>
+<p class="note">All sale figures are pre-tax. Set Tax on sale in the tool to see after-tax partner shares.</p>
+
+<h3>Sell now or keep building</h3>
+<p>The real question is not what the agency sells for but what the partners walk away with in total: profit already taken, plus the sale price, plus Final Expense commissions still owed.</p>
+
+<!-- bar heights: scale 140pt = $70M → 2pt per $1M -->
+<div class="chart">
+  <div class="col"><div class="top">$4.25M</div><div class="stack">
+    <div style="height:1.78pt;background:var(--fe)"></div><div style="height:5.67pt;background:var(--gold)"></div><div style="height:1.04pt;background:var(--feL)"></div></div></div>
+  <div class="gap">+$23.48M<span>one more year</span></div>
+  <div class="col"><div class="top">$27.73M</div><div class="stack">
+    <div style="height:10.23pt;background:var(--fe)"></div><div style="height:42.71pt;background:var(--gold)"></div><div style="height:2.52pt;background:var(--feL)"></div></div></div>
+  <div class="gap">+$36.16M<span>one more year</span></div>
+  <div class="col"><div class="top">$63.89M</div><div class="stack">
+    <div style="height:28.48pt;background:var(--fe)"></div><div style="height:95.30pt;background:var(--gold)"></div><div style="height:4.00pt;background:var(--feL)"></div></div></div>
+</div>
+<div class="xl"><div>Sell at end of Year 1</div><div class="g"></div><div>Year 2</div><div class="g"></div><div>Year 3</div></div>
+<div class="legend"><span><i style="background:var(--fe)"></i>Profit already taken</span><span><i style="background:var(--gold)"></i>Sale price</span><span><i style="background:var(--feL)"></i>FE commissions still owed</span></div>
+
+<table>
+  <thead><tr><th>Total if sold at the end of…</th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+  <tbody>
+    <tr><td>Profit already taken</td><td>$0.89M</td><td>$5.11M</td><td>$14.24M</td></tr>
+    <tr><td>Sale price</td><td>$2.84M</td><td>$21.36M</td><td>$47.65M</td></tr>
+    <tr><td>FE commissions still owed</td><td>$0.52M</td><td>$1.26M</td><td>$2.00M</td></tr>
+    <tr class="gold"><td>Total</td><td>$4.25M</td><td>$27.73M</td><td>$63.89M</td></tr>
+    <tr><td>Per partner (25%)</td><td>$1.06M</td><td>$6.93M</td><td>$15.97M</td></tr>
+  </tbody>
+</table>
+<div class="callout green"><div class="t">On this plan, holding pays</div>Each extra year adds more than the year before, because profit grows and a bigger agency earns a higher multiple. Selling early only makes sense if the plan stops hitting its numbers or an offer comes in well above the range.</div>
+
+<h3>What raises the price</h3>
+<p>The tool tests nine operating improvements and shows what each one adds to the sale price. At the end of Year 3:</p>
+<table>
+  <thead><tr><th>Improvement</th><th>Adds to Year 3 price</th></tr></thead>
+  <tbody>
+    <tr><td>Final Expense lapse 5 points lower</td><td>+$4.08M</td></tr>
+    <tr><td>Medicare lapse 5 points lower</td><td>+$4.01M</td></tr>
+    <tr><td>Medicare placement 5 points higher</td><td>+$3.06M</td></tr>
+    <tr><td>Overhead 2 points leaner</td><td>+$2.92M</td></tr>
+    <tr><td>Final Expense placement 5 points higher</td><td>+$2.82M</td></tr>
+    <tr><td>Add 10 more FE calls a day each quarter</td><td>+$2.18M</td></tr>
+    <tr><td>Final Expense calls $1 cheaper</td><td>+$1.71M</td></tr>
+    <tr><td>Medicare calls $1 cheaper</td><td>+$1.69M</td></tr>
+    <tr><td>10 more Medicare agents in Year 3</td><td>+$68K</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><b>Year 1 is different.</b> Because the Year 1 price comes from the renewal book, cutting costs adds nothing there. Only a bigger book moves it: 10 more Medicare agents in Year 1 adds about $1.08M.</li>
+  <li><b>The next multiple.</b> Year 3 adjusted EBITDA is $7.33M. Another <b>$2.67M</b> reaches the $10M line, where the multiple steps from 6.5x to 8x and the agency is worth about <b>$80M</b>.</li>
+</ul>
+<div class="callout gold"><div class="t">In the negotiation: renewals already in force</div>At the end of Year 3, next year's renewals already in force are worth <b>$4.98M more</b> than Year 3 was paid. A buyer pricing on trailing earnings gets that growth for free. Ask for it in the earnout.</div>
+<p class="note">These are planning estimates, not an appraisal. The multiples reflect Final Expense and Medicare agency deals, which trade below property and casualty platforms (around 11.8x at $1M+ EBITDA) because their revenue depends on continued lead spend and on carrier and CMS commission rules.</p>
+
+<h2 class="new-page"><span class="num">3</span>About the Insurance Outlook tool</h2>
+<p>Insurance Outlook is a web app that models the agency's Final Expense and Medicare business over 36 months and recalculates every number instantly when an assumption changes. It has three pages, switched with the toggle at the top of the screen: <b>Planner</b>, <b>✦ Income goal</b> and <b>◆ Exit value</b>.</p>
+
+<div class="pagecard">
+<h3>Planner: "What will this plan produce?"</h3>
+<p>Works forward: set the assumptions and see revenue, costs, profit and partner payouts.</p>
+<ul>
+  <li><b>Assumptions panel (left).</b> Sliders and number boxes in three tabs: Final Expense, Medicare and Company. The Company tab now includes the <b>Exit valuation</b> settings. A small colored dot marks any value changed from the default; click it to reset that value.</li>
+  <li><b>Period cards (top).</b> Net profit and revenue for Year 1, Year 2, Year 3 and All 3 years. Each year card shows an <b>Exit</b> tag with the sale price at that year-end, and the All 3 years card names the best year to sell. Click a tag to jump to the Exit value page for that year.</li>
+  <li><b>What it takes (middle).</b> One row per business line: agents → calls → applications → policies → revenue → costs → net profit. Hover Revenue or Costs for the breakdown.</li>
+  <li><b>Charts (bottom left).</b> Cash flow (with a Month detail table), Team, Profit by year, Medicare, and Table (the full 3-year profit and loss).</li>
+  <li><b>Partner payouts (bottom right).</b> Edit each partner's name and split. Splits must add to 100%.</li>
+</ul>
+</div>
+
+<div class="pagecard">
+<h3>Income goal: "What does it take to earn this?"</h3>
+<p>Works backward: enter the monthly take-home you want and see the business needed to produce it: agents, calls a day, applications and policies, monthly revenue and costs, and what the agency keeps. It also shows when the current plan reaches that volume, the leaner first nine months, and the extra income renewals and residuals add from Year 2.</p>
+<p>For example, a $25,000-a-month goal for Partner 1 (25% split, 80% Final Expense mix) needs the agency to net $100,000 a month: about 10 Final Expense agents on 194 calls a day, plus 38 Medicare agents in season. The current plan reaches that Final Expense volume in month 4.</p>
+</div>
+
+<div class="pagecard">
+<h3>Exit value: "What would we sell for?" <span class="tag">NEW</span></h3>
+<p>Prices the agency at the end of Year 1, 2 and 3 and shows what the partners would take home.</p>
+<ul>
+  <li><b>Year-end picker (top left).</b> Three cards with the sale price at each year-end and whether it is priced on earnings or as a book. Click one to select it.</li>
+  <li><b>The number.</b> The sale price for the selected year, its low-to-high range, the multiple used and the likely buyer.</li>
+  <li><b>The deal.</b> Cash at close versus the 24-month earnout, the Final Expense commissions the sellers keep, and each partner's share and cash at close.</li>
+  <li><b>How a buyer prices you.</b> The earnings and book calculations side by side. The winner is marked "This is your number"; the other shows how much less that offer would be.</li>
+  <li><b>Sell now or keep building.</b> A chart of the total the partners walk away with at each year-end, and how much one more year adds.</li>
+  <li><b>Next multiple, Biggest levers, Locked-in renewals.</b> How much more profit reaches the next multiple, the three improvements worth most to the price, and renewals already in force that a buyer should pay for.</li>
+</ul>
+</div>
+
+<h2><span class="num">4</span>How to use the tool</h2>
+<p>Start on the Planner to test the plan, use Income goal to turn a personal target into staffing and lead numbers, and use Exit value to see what the work is worth to a buyer.</p>
+
+<h3>Planner: test a scenario</h3>
+<ol class="steps">
+  <li>Open the tool. It loads on the Planner page with the default plan.</li>
+  <li>In the Assumptions panel, pick a tab (Final Expense, Medicare or Company).</li>
+  <li>Drag a slider or type a value and press Enter. Everything updates immediately.</li>
+  <li>Click a period card to see that period in the chain and partner table.</li>
+  <li>Read the What it takes chain left to right to see how agents turn into net profit.</li>
+  <li>Switch chart views to check monthly Cash flow and Team growth. Use Month detail for month-by-month Final Expense numbers.</li>
+  <li>In Partner payouts, enter names and splits (they must total 100%). Set a Tax / reserve holdback on the Company tab to see after-tax figures.</li>
+</ol>
+
+<h3>Income goal: work back from a target</h3>
+<ol class="steps">
+  <li>Click <b>✦ Income goal</b> at the top.</li>
+  <li>Type the monthly take-home you want, or click a preset.</li>
+  <li>Under Whose paycheck?, pick the partner. Their split comes from the Planner.</li>
+  <li>Slide the profit mix between Final Expense and Medicare.</li>
+  <li>Read The recipe for the agents, calls, applications and policies needed each workday.</li>
+  <li>If the goal is not reachable, a policy is losing money at current assumptions. Go back to the Planner and lower call costs or payouts, or raise conversion.</li>
+</ol>
+
+<h3>Exit value: price the agency</h3>
+<ol class="steps">
+  <li>Click <b>◆ Exit value</b> at the top, or click an Exit tag on a Planner period card.</li>
+  <li>Pick End of Year 1, 2 or 3.</li>
+  <li>Read the price and range, and check which lens set it in How a buyer prices you.</li>
+  <li>In The deal, check cash at close, the earnout and each partner's share.</li>
+  <li>Use Sell now or keep building to compare the total at each year-end.</li>
+  <li>To test a different deal, open the Planner's Company tab and change the book multiples, overhead buyers deduct, cash at close or tax on sale.</li>
+  <li>Use Biggest levers to decide which operating rates to work on first.</li>
+</ol>
+
+<h3>Saving, sharing and exporting</h3>
+<table>
+  <thead><tr><th>Button (top right)</th><th style="text-align:left">What it does</th></tr></thead>
+  <tbody>
+    <tr><td>Model notes</td><td class="l">Explains the math, the fixes versus the original spreadsheet, the assumptions, and how exit value is calculated</td></tr>
+    <tr><td>Reset</td><td class="l">Returns every input, partner name and goal to the defaults</td></tr>
+    <tr><td>Copy share link</td><td class="l">Copies a link that opens the tool with your exact settings and page, including Exit value</td></tr>
+    <tr><td>Export CSV</td><td class="l">Downloads the monthly Final Expense, Medicare, 3-year summary and Exit value tables for Excel</td></tr>
+  </tbody>
+</table>
+<p>The tool remembers your last settings in your browser. Use Copy share link to send a scenario to a partner, since their browser will not have your saved settings.</p>
+
+<h2><span class="num">5</span>Keeping the plan current</h2>
+<p>Review the plan each quarter. Replace the default conversion, placement, lapse and cost-per-call rates with the agency's actual results, then share the updated scenario with partners using Copy share link.</p>
+<ul>
+  <li><b>Track lapse first.</b> Final Expense lapse (30%) and Medicare lapse (20%) have the biggest effect on both yearly profit and the sale price. Each 5-point improvement is worth about $4M at a Year 3 exit.</li>
+  <li><b>Then cost per call</b> ($7 Final Expense, $10 Medicare) and placement rates.</li>
+  <li><b>Before any sale conversation,</b> replace the exit assumptions with real terms from brokers or offers (book multiples, overhead, cash at close and tax on sale) so the Exit value page reflects the market, not the defaults.</li>
+</ul>
+
+<div class="fine">Exit values are planning estimates based on typical Final Expense and Medicare agency deal multiples, not an appraisal or an offer. Sale figures are pre-tax unless tax on sale is set. Earnouts are paid over 24 months subject to retention.</div>
+
+</body>
+</html>
